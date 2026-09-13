@@ -77,21 +77,38 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
 /* ---------- level pills ---------- */
 
+.levelbar { border-bottom: 1px solid var(--line-soft); }
+.levelbar-head {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 22px; border: none; background: none; cursor: pointer;
+  color: var(--text-dim); font: inherit; font-size: 11.5px;
+  text-transform: uppercase; letter-spacing: 1.1px; font-weight: 700;
+}
+.levelbar-head:hover { color: var(--text); background: #ffffff06; }
+.levelbar-head .chev { font-size: 13px; transition: transform .18s; color: var(--accent); }
+.levelbar-now {
+  text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12.5px;
+  color: var(--text-faint); margin-left: auto; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .pills {
   display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 12px 22px; border-bottom: 1px solid var(--line-soft);
+  padding: 2px 22px 14px;
+  max-height: 60vh; overflow: hidden;
+  transition: max-height .22s ease, opacity .18s, padding .22s;
 }
+.levelbar.collapsed .pills { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; }
+.levelbar.collapsed .chev { transform: rotate(-90deg); }
 .pill {
   min-width: 32px; height: 32px; padding: 0 8px;
   border-radius: 8px; border: 1px solid var(--line); background: var(--bg-raised);
   color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
   transition: all .12s;
 }
-.pill:hover:not(.locked) { border-color: var(--accent-deep); color: var(--text); }
+.pill:hover { border-color: var(--accent-deep); color: var(--text); }
 .pill.current { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .pill.solved { color: var(--good); border-color: #34d39955; }
 .pill.solved.gold { color: var(--amber); border-color: #fbbf2455; }
-.pill.locked { opacity: .4; cursor: not-allowed; }
 /* flex-basis:100% forces each chapter onto its own row of pills */
 .pill-chapter {
   flex-basis: 100%; margin: 6px 0 -2px;
@@ -310,7 +327,14 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   </div>
 </header>
 
-<nav id="pills" class="pills" aria-label="Levels"></nav>
+<section id="levelbar" class="levelbar">
+  <button id="barToggle" class="levelbar-head" type="button" aria-expanded="true" aria-controls="pills">
+    <span class="chev" aria-hidden="true">▾</span>
+    <span class="levelbar-title">Levels</span>
+    <span id="barNow" class="levelbar-now"></span>
+  </button>
+  <nav id="pills" class="pills" aria-label="Levels"></nav>
+</section>
 
 <div class="layout">
   <aside class="panel panel-left">
@@ -1473,7 +1497,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     hintsShown: 0,
     usedHelp: false,
     solved: {},          // levelIndex -> 'gold' | 'silver'
-    armed: null          // {kind:'op'|'rel', value:string} for click-to-place
+    armed: null,         // {kind:'op'|'rel', value:string} for click-to-place
+    barOpen: true        // is the level bar expanded?
   };
 
   var el = {};
@@ -1487,21 +1512,16 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       if (typeof saved.levelIndex === 'number') {
         state.levelIndex = Math.min(Math.max(saved.levelIndex, 0), LEVELS.length - 1);
       }
+      if (typeof saved.barOpen === 'boolean') state.barOpen = saved.barOpen;
     } catch (e) { /* fresh start */ }
   }
 
   function save() {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ solved: state.solved, levelIndex: state.levelIndex }));
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        solved: state.solved, levelIndex: state.levelIndex, barOpen: state.barOpen
+      }));
     } catch (e) { /* private mode: progress simply will not persist */ }
-  }
-
-  function unlockedCount() {
-    var n = 1;
-    for (var i = 0; i < LEVELS.length; i++) {
-      if (state.solved[i]) n = Math.max(n, i + 2);
-    }
-    return Math.min(n, LEVELS.length);
   }
 
   /* ---------- helpers ---------- */
@@ -1876,7 +1896,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       save();
       setFeedback('good', (grade === 'gold' ? '★ ' : '✓ ') + '<b>Correct!</b> ' +
         (state.levelIndex + 1 < LEVELS.length
-          ? 'Level ' + (state.levelIndex + 2) + ' is unlocked.'
+          ? 'Next up — level ' + (state.levelIndex + 2) + ': ' + esc(LEVELS[state.levelIndex + 1].title) + '.'
           : 'That was the last level — you have the whole algebra.'));
       celebrate();
       renderPills();
@@ -1910,7 +1930,6 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
   function goToLevel(i) {
     if (i < 0 || i >= LEVELS.length) return;
-    if (i > unlockedCount() - 1) return;
     state.levelIndex = i;
     state.tree = null;
     state.hintsShown = 0;
@@ -1922,13 +1941,11 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   }
 
   function renderPills() {
-    var unlocked = unlockedCount();
     el.pills.innerHTML = LEVELS.map(function (lv, i) {
       var cls = 'pill';
       if (i === state.levelIndex) cls += ' current';
       if (state.solved[i]) cls += ' solved ' + state.solved[i];
-      if (i >= unlocked) cls += ' locked';
-      var mark = state.solved[i] === 'gold' ? '★' : (state.solved[i] ? '✓' : (i >= unlocked ? '🔒' : i + 1));
+      var mark = state.solved[i] === 'gold' ? '★' : (state.solved[i] ? '✓' : i + 1);
       var heading = lv.chapter ? '<span class="pill-chapter">' + esc(lv.chapter) + '</span>' : '';
       return heading + '<button class="' + cls + '" data-i="' + i + '" title="' +
         esc((i + 1) + '. ' + lv.title) + '">' + mark + '</button>';
@@ -1939,6 +1956,15 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
     var solvedCount = Object.keys(state.solved).length;
     el.progress.textContent = solvedCount + ' / ' + LEVELS.length + ' solved';
+    el.barNow.textContent = (state.levelIndex + 1) + ' · ' + level().title;
+  }
+
+  function setBarOpen(open) {
+    state.barOpen = open;
+    el.levelbar.classList.toggle('collapsed', !open);
+    el.barToggle.setAttribute('aria-expanded', String(open));
+    el.barToggle.title = open ? 'Hide the level list' : 'Show the level list';
+    save();
   }
 
   function renderQuestion() {
@@ -1956,7 +1982,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
   function renderNav() {
     el.prev.disabled = state.levelIndex === 0;
-    el.next.disabled = state.levelIndex >= unlockedCount() - 1;
+    el.next.disabled = state.levelIndex >= LEVELS.length - 1;
     var hints = level().hints || [];
     el.hint.disabled = false;
     el.hint.textContent = state.hintsShown >= hints.length ? 'No hints left' : 'Hint (' +
@@ -2018,7 +2044,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   /* ---------- boot ---------- */
 
   function init() {
-    ['pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
+    ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
      'tables', 'palette', 'canvas', 'formula', 'output', 'outputMeta', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
@@ -2026,6 +2052,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     el.next = document.getElementById('btnNext');
     el.hint = document.getElementById('btnHint');
 
+    el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
     document.getElementById('btnCheck').addEventListener('click', check);
     document.getElementById('btnClear').addEventListener('click', function () {
       state.tree = null;
@@ -2056,6 +2083,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
     load();
     state.usedHelp = state.solved[state.levelIndex] === 'silver';
+    setBarOpen(state.barOpen);
     render();
   }
 

@@ -37,6 +37,9 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
   every keystroke, including a plain-English error when the query does not typecheck.
 - **Check answer** compares your result to the expected relation. Column order does not matter
   (relations are unordered sets of attributes); the rename level additionally checks column names.
+- **Every level is open from the start.** Nothing has to be unlocked — click any level in the bar at
+  the top and go straight to it. Collapse that bar with the **Levels** header when you want the room;
+  it remembers whether you left it open.
 - Solving a level without hints earns ★; solving it after a hint or the solution earns ✓. Progress
   is kept in `localStorage`.
 

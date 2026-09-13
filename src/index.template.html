@@ -24,7 +24,14 @@
   </div>
 </header>
 
-<nav id="pills" class="pills" aria-label="Levels"></nav>
+<section id="levelbar" class="levelbar">
+  <button id="barToggle" class="levelbar-head" type="button" aria-expanded="true" aria-controls="pills">
+    <span class="chev" aria-hidden="true">▾</span>
+    <span class="levelbar-title">Levels</span>
+    <span id="barNow" class="levelbar-now"></span>
+  </button>
+  <nav id="pills" class="pills" aria-label="Levels"></nav>
+</section>
 
 <div class="layout">
   <aside class="panel panel-left">

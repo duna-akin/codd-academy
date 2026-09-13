@@ -13,7 +13,8 @@
     hintsShown: 0,
     usedHelp: false,
     solved: {},          // levelIndex -> 'gold' | 'silver'
-    armed: null          // {kind:'op'|'rel', value:string} for click-to-place
+    armed: null,         // {kind:'op'|'rel', value:string} for click-to-place
+    barOpen: true        // is the level bar expanded?
   };
 
   var el = {};
@@ -27,21 +28,16 @@
       if (typeof saved.levelIndex === 'number') {
         state.levelIndex = Math.min(Math.max(saved.levelIndex, 0), LEVELS.length - 1);
       }
+      if (typeof saved.barOpen === 'boolean') state.barOpen = saved.barOpen;
     } catch (e) { /* fresh start */ }
   }
 
   function save() {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ solved: state.solved, levelIndex: state.levelIndex }));
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        solved: state.solved, levelIndex: state.levelIndex, barOpen: state.barOpen
+      }));
     } catch (e) { /* private mode: progress simply will not persist */ }
-  }
-
-  function unlockedCount() {
-    var n = 1;
-    for (var i = 0; i < LEVELS.length; i++) {
-      if (state.solved[i]) n = Math.max(n, i + 2);
-    }
-    return Math.min(n, LEVELS.length);
   }
 
   /* ---------- helpers ---------- */
@@ -416,7 +412,7 @@
       save();
       setFeedback('good', (grade === 'gold' ? '★ ' : '✓ ') + '<b>Correct!</b> ' +
         (state.levelIndex + 1 < LEVELS.length
-          ? 'Level ' + (state.levelIndex + 2) + ' is unlocked.'
+          ? 'Next up — level ' + (state.levelIndex + 2) + ': ' + esc(LEVELS[state.levelIndex + 1].title) + '.'
           : 'That was the last level — you have the whole algebra.'));
       celebrate();
       renderPills();
@@ -450,7 +446,6 @@
 
   function goToLevel(i) {
     if (i < 0 || i >= LEVELS.length) return;
-    if (i > unlockedCount() - 1) return;
     state.levelIndex = i;
     state.tree = null;
     state.hintsShown = 0;
@@ -462,13 +457,11 @@
   }
 
   function renderPills() {
-    var unlocked = unlockedCount();
     el.pills.innerHTML = LEVELS.map(function (lv, i) {
       var cls = 'pill';
       if (i === state.levelIndex) cls += ' current';
       if (state.solved[i]) cls += ' solved ' + state.solved[i];
-      if (i >= unlocked) cls += ' locked';
-      var mark = state.solved[i] === 'gold' ? '★' : (state.solved[i] ? '✓' : (i >= unlocked ? '🔒' : i + 1));
+      var mark = state.solved[i] === 'gold' ? '★' : (state.solved[i] ? '✓' : i + 1);
       var heading = lv.chapter ? '<span class="pill-chapter">' + esc(lv.chapter) + '</span>' : '';
       return heading + '<button class="' + cls + '" data-i="' + i + '" title="' +
         esc((i + 1) + '. ' + lv.title) + '">' + mark + '</button>';
@@ -479,6 +472,15 @@
 
     var solvedCount = Object.keys(state.solved).length;
     el.progress.textContent = solvedCount + ' / ' + LEVELS.length + ' solved';
+    el.barNow.textContent = (state.levelIndex + 1) + ' · ' + level().title;
+  }
+
+  function setBarOpen(open) {
+    state.barOpen = open;
+    el.levelbar.classList.toggle('collapsed', !open);
+    el.barToggle.setAttribute('aria-expanded', String(open));
+    el.barToggle.title = open ? 'Hide the level list' : 'Show the level list';
+    save();
   }
 
   function renderQuestion() {
@@ -496,7 +498,7 @@
 
   function renderNav() {
     el.prev.disabled = state.levelIndex === 0;
-    el.next.disabled = state.levelIndex >= unlockedCount() - 1;
+    el.next.disabled = state.levelIndex >= LEVELS.length - 1;
     var hints = level().hints || [];
     el.hint.disabled = false;
     el.hint.textContent = state.hintsShown >= hints.length ? 'No hints left' : 'Hint (' +
@@ -558,7 +560,7 @@
   /* ---------- boot ---------- */
 
   function init() {
-    ['pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
+    ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
      'tables', 'palette', 'canvas', 'formula', 'output', 'outputMeta', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
@@ -566,6 +568,7 @@
     el.next = document.getElementById('btnNext');
     el.hint = document.getElementById('btnHint');
 
+    el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
     document.getElementById('btnCheck').addEventListener('click', check);
     document.getElementById('btnClear').addEventListener('click', function () {
       state.tree = null;
@@ -596,6 +599,7 @@
 
     load();
     state.usedHelp = state.solved[state.levelIndex] === 'silver';
+    setBarOpen(state.barOpen);
     render();
   }
 

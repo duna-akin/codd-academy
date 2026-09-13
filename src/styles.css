@@ -70,21 +70,38 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
 /* ---------- level pills ---------- */
 
+.levelbar { border-bottom: 1px solid var(--line-soft); }
+.levelbar-head {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 22px; border: none; background: none; cursor: pointer;
+  color: var(--text-dim); font: inherit; font-size: 11.5px;
+  text-transform: uppercase; letter-spacing: 1.1px; font-weight: 700;
+}
+.levelbar-head:hover { color: var(--text); background: #ffffff06; }
+.levelbar-head .chev { font-size: 13px; transition: transform .18s; color: var(--accent); }
+.levelbar-now {
+  text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12.5px;
+  color: var(--text-faint); margin-left: auto; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .pills {
   display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 12px 22px; border-bottom: 1px solid var(--line-soft);
+  padding: 2px 22px 14px;
+  max-height: 60vh; overflow: hidden;
+  transition: max-height .22s ease, opacity .18s, padding .22s;
 }
+.levelbar.collapsed .pills { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; }
+.levelbar.collapsed .chev { transform: rotate(-90deg); }
 .pill {
   min-width: 32px; height: 32px; padding: 0 8px;
   border-radius: 8px; border: 1px solid var(--line); background: var(--bg-raised);
   color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
   transition: all .12s;
 }
-.pill:hover:not(.locked) { border-color: var(--accent-deep); color: var(--text); }
+.pill:hover { border-color: var(--accent-deep); color: var(--text); }
 .pill.current { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .pill.solved { color: var(--good); border-color: #34d39955; }
 .pill.solved.gold { color: var(--amber); border-color: #fbbf2455; }
-.pill.locked { opacity: .4; cursor: not-allowed; }
 /* flex-basis:100% forces each chapter onto its own row of pills */
 .pill-chapter {
   flex-basis: 100%; margin: 6px 0 -2px;

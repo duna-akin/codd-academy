@@ -6,6 +6,8 @@ const errors = [];
 JSDOM.fromFile(path, {
   runScripts: 'dangerously',
   resources: 'usable',
+  // jsdom refuses localStorage on a file:// origin; a real one exercises the save/load path.
+  url: 'https://relational-algebra.test/index.html',
   pretendToBeVisual: true,
   virtualConsole: new (require('jsdom').VirtualConsole)()
     .on('jsdomError', e => { if (!/getContext/.test(e.message)) errors.push('jsdomError: ' + e.message); })
@@ -22,6 +24,30 @@ JSDOM.fromFile(path, {
   console.log('boot  :', text('#levelLabel'), '|', text('#levelTitle'));
   console.log('tables:', doc.querySelectorAll('.table-card').length, 'relation cards,',
               doc.querySelectorAll('.op-chip').length, 'operator chips');
+
+  // 0. With nothing solved, the last level must already be reachable.
+  const pills = doc.querySelectorAll('.pill');
+  if (doc.querySelectorAll('.pill[disabled], .pill.locked').length) {
+    errors.push('locked pills present on a fresh profile');
+  }
+  click(pills[pills.length - 1]);
+  console.log('jump  :', text('#levelLabel'), '(from a fresh profile, nothing solved)');
+  if (!text('#levelLabel').includes('Level ' + LEVELS.length)) errors.push('could not jump to the last level');
+  click(doc.querySelectorAll('.pill')[0]);
+  if (!text('#levelLabel').includes('Level 1')) errors.push('could not jump back to level 1');
+
+  // 0b. The level bar collapses, expands, and remembers which it was.
+  const bar = $('#levelbar'), toggle = $('#barToggle');
+  click(toggle);
+  const collapsed = bar.classList.contains('collapsed') && toggle.getAttribute('aria-expanded') === 'false';
+  let stored = {};
+  try { stored = JSON.parse(window.localStorage.getItem('relational-algebra-game-v1') || '{}'); }
+  catch (e) { errors.push('localStorage unavailable: ' + e.message); }
+  click(toggle);
+  const reopened = !bar.classList.contains('collapsed') && toggle.getAttribute('aria-expanded') === 'true';
+  console.log('bar   :', 'collapses =', collapsed, '| reopens =', reopened,
+              '| persisted barOpen =', stored.barOpen, '| label =', text('#barNow'));
+  if (!collapsed || !reopened || stored.barOpen !== false) errors.push('level bar toggle misbehaved');
 
   // 1. Click-to-place: arm the Employee chip, click the empty slot.
   click(doc.querySelector('.table-head'));
