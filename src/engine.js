@@ -402,7 +402,7 @@
                   hint: 'Every pairing of left and right rows.' },
     join:       { symbol: '⋈', name: 'Join',       arity: 2, param: 'optional', paramLabel: 'condition',
                   hint: 'Natural join on shared attributes; add a condition for a theta join.',
-                  placeholder: 'leave empty for natural join' },
+                  placeholder: 'optional — empty = natural' },
     divide:     { symbol: '÷', name: 'Divide',     arity: 2, param: 'none',
                   hint: 'Left rows matching every row of the right relation.' }
   };

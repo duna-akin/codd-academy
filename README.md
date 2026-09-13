@@ -1,5 +1,8 @@
 # Relational Algebra Playground
-![demo](image.png)
+
+![The playground mid-puzzle: an operator palette and the Student and Course tables down the left, a query tree of π, ⋈, ÷ and σ nodes on the canvas, the same query rendered in standard notation beneath it, and the result table below that.](docs/screenshot.png)
+
+<sub>Solving the division puzzle: every student who has taken every CS course.</sub>
 
 An interactive game for learning relational algebra. You are shown a set of relations and asked a
 question in English; you answer by dragging operator symbols (π, σ, ρ, ∪, ∩, −, ×, ⋈, ÷) onto a
