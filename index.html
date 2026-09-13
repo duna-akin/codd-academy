@@ -160,6 +160,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .op-chip.is-new { border-color: #d8a65755; }
 
 .op-project .op-sym, .node-op.op-project .node-sym { color: var(--accent); }
+.op-group .op-sym, .node-op.op-group .node-sym { color: var(--gold); }
 .op-select .op-sym, .node-op.op-select .node-sym { color: var(--gold); }
 .op-rename .op-sym, .node-op.op-rename .node-sym { color: var(--pale); }
 .op-join .op-sym, .node-op.op-join .node-sym,
@@ -241,6 +242,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   border-radius: 6px; padding: 4px 8px; font-family: var(--mono); font-size: 12.5px;
   min-width: 160px; width: 22ch; outline: none;
 }
+.param-input.pre-input { width: 13ch; min-width: 90px; text-align: right; }
 .param-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(231, 154, 168, .18); }
 .param-input::placeholder { color: #6d5b5f; }
 
@@ -321,6 +323,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 }
 .s-sym.s-rel { color: var(--blue); font-size: 12px; }
 .s-sym.s-attr { color: var(--warm); }
+.s-sym.s-fn { color: var(--gold); }
 .s-word { font-family: var(--mono); font-size: 13px; color: var(--text); flex-shrink: 0; }
 .s-hint {
   font-size: 11.5px; color: var(--text-faint); margin-left: auto;
@@ -474,6 +477,14 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     suggests attribute names, outside them relation names; <kbd>Tab</kbd> with no menu open jumps to
     the next empty spot, so <code>proj</code> ⇥ <code>ena</code> ⇥ ⇥ <code>Emp</code> ⇥ writes the
     whole query. <kbd>↑</kbd><kbd>↓</kbd> pick, <kbd>Esc</kbd> dismisses, <kbd>Enter</kbd> checks.
+  </p>
+  <p>
+    <b>Aggregation:</b> <code>ℱ</code> has two boxes — grouping attributes on its
+    <i>left</i>, functions on its right: <code>dept ℱ COUNT(eid), AVG(salary)</code> gives one row
+    per department. Leave the left box empty to summarise everything in a single row. Functions are
+    <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>, <code>MIN</code> and <code>MAX</code>;
+    the output columns are named after them (<code>COUNT_eid</code>), so σ can filter on them the
+    way SQL's HAVING does. Type <code>group</code> for the ℱ.
   </p>
   <p>
     <b>Typing:</b> the <i>Type it</i> box takes standard notation —
@@ -848,6 +859,90 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     return select(product(r, s), param);
   }
 
+  var AGGREGATES = {
+    COUNT: 1, SUM: 1, AVG: 1, AVERAGE: 1, MIN: 1, MAX: 1
+  };
+
+  function splitTop(text) {
+    var out = [], depth = 0, current = '';
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (c === '(') depth++;
+      if (c === ')') depth--;
+      if (c === ',' && depth === 0) { out.push(current); current = ''; continue; }
+      current += c;
+    }
+    out.push(current);
+    return out.map(function (t) { return t.trim(); }).filter(Boolean);
+  }
+
+  function numeric(v, fn, attr) {
+    var n = typeof v === 'number' ? v : Number(v);
+    if (typeof v !== 'number' && (v === '' || isNaN(n))) {
+      throw RAError(fn + ' needs numbers, but ' + attr + ' holds "' + v + '".');
+    }
+    return n;
+  }
+
+  /* Elmasri-style aggregation: <grouping attributes> ℱ <function list> (R) */
+  function aggregate(r, funcSpec, groupSpec) {
+    var specs = splitTop(funcSpec).map(function (item) {
+      var m = /^([A-Za-z]+)\s*\(\s*(\*|[A-Za-z_][A-Za-z0-9_.]*)\s*\)$/.exec(item);
+      if (!m) {
+        throw RAError('"' + item + '" is not a function call. Write them like COUNT(eid) or AVG(salary).');
+      }
+      var fn = m[1].toUpperCase(), arg = m[2];
+      if (!AGGREGATES[fn]) {
+        throw RAError('There is no aggregate function "' + m[1] + '". Available: ' +
+          Object.keys(AGGREGATES).join(', ') + '.');
+      }
+      if (fn === 'AVERAGE') fn = 'AVG';
+      if (arg === '*' && fn !== 'COUNT') throw RAError(fn + '(*) is not allowed — name an attribute.');
+      var attr = arg === '*' ? null : resolveAttr(r.attrs, arg);
+      return { fn: fn, attr: attr, out: arg === '*' ? 'COUNT' : fn + '_' + arg };
+    });
+    if (!specs.length) throw RAError('ℱ needs at least one function, e.g. COUNT(eid).');
+
+    var grouping = splitList(groupSpec).map(function (g) { return resolveAttr(r.attrs, g); });
+    var attrs = grouping.concat(specs.map(function (s2) { return s2.out; }));
+    var dup = attrs.filter(function (a, idx) { return attrs.indexOf(a) !== idx; });
+    if (dup.length) throw RAError('ℱ would produce two columns named "' + dup[0] + '".');
+
+    var order = [], groups = Object.create(null);
+    r.rows.forEach(function (row) {
+      var key = JSON.stringify(grouping.map(function (g) { return row[g]; }));
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(row);
+    });
+
+    var rows = order.map(function (key) {
+      var members = groups[key], out = {};
+      grouping.forEach(function (g) { out[g] = members[0][g]; });
+      specs.forEach(function (spec) {
+        var values = spec.attr === null ? [] : members.map(function (row) { return row[spec.attr]; });
+        switch (spec.fn) {
+          case 'COUNT': out[spec.out] = members.length; break;
+          case 'SUM': case 'AVG': {
+            var total = values.reduce(function (acc, v) { return acc + numeric(v, spec.fn, spec.attr); }, 0);
+            out[spec.out] = spec.fn === 'SUM' ? total : total / members.length;
+            break;
+          }
+          case 'MIN': case 'MAX': {
+            out[spec.out] = values.reduce(function (best, v) {
+              if (best === undefined) return v;
+              var pair = coerce(best, v);
+              var takeV = spec.fn === 'MIN' ? pair[1] < pair[0] : pair[1] > pair[0];
+              return takeV ? v : best;
+            }, undefined);
+            break;
+          }
+        }
+      });
+      return out;
+    });
+    return relation('ℱ(' + r.name + ')', attrs, rows);
+  }
+
   function divide(r, s) {
     var missing = s.attrs.filter(function (a) { return r.attrs.indexOf(a) === -1; });
     if (missing.length) {
@@ -895,7 +990,11 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
                   hint: 'Natural join on shared attributes; add a condition for a theta join.',
                   placeholder: 'optional — empty = natural' },
     divide:     { symbol: '÷', name: 'Divide',     arity: 2, param: 'none',
-                  hint: 'Left rows matching every row of the right relation.' }
+                  hint: 'Left rows matching every row of the right relation.' },
+    group:      { symbol: 'ℱ', name: 'Aggregate',  arity: 1, param: 'required', paramLabel: 'functions',
+                  pre: true, preLabel: 'grouping attributes',
+                  hint: 'One row per group: COUNT, SUM, AVG, MIN, MAX.',
+                  placeholder: 'COUNT(eid), AVG(salary)', prePlaceholder: 'group by… (optional)' }
   };
 
   function symbolOf(op) { return OPS[op] ? OPS[op].symbol : op; }
@@ -924,6 +1023,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       case 'product': return product(kids[0], kids[1]);
       case 'join': return join(kids[0], kids[1], node.param);
       case 'divide': return divide(kids[0], kids[1]);
+      case 'group': return aggregate(kids[0], node.param, node.group);
     }
     throw RAError('Unknown operator "' + node.op + '".');
   }
@@ -940,7 +1040,9 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     var sym = '<span class="f-op">' + meta.symbol + '</span>';
     if (meta.arity === 1) {
       var sub = String(node.param || '').trim();
-      return sym + (sub ? '<sub class="f-sub">' + esc(sub) + '</sub>' : '') +
+      var pre = meta.pre ? String(node.group || '').trim() : '';
+      return (pre ? '<sub class="f-sub">' + esc(pre) + '</sub>' : '') + sym +
+        (sub ? '<sub class="f-sub">' + esc(sub) + '</sub>' : '') +
         '<span class="f-paren">(</span>' + toHTML(kids[0]) + '<span class="f-paren">)</span>';
     }
     var subB = String(node.param || '').trim();
@@ -969,6 +1071,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   var LOW_PRECEDENCE = { union: 1, intersect: 1, difference: 1 };
   var HIGH_PRECEDENCE = { product: 1, join: 1, divide: 1 };
   var IDENT = /^[A-Za-z_][A-Za-z0-9_]*/;
+  var IDENT_DOT = /^[A-Za-z_][A-Za-z0-9_.]*/;
   // Operator words are matched letters-only: "_" is a legal identifier
   // character, so IDENT would swallow the "_" of "join_{...}".
   var WORD = /^[A-Za-z]+/;
@@ -1038,7 +1141,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         if (p !== null && op !== 'join') {
           fail(OPS[op].symbol + ' does not take a condition');
         }
-        node = { type: 'op', op: op, param: p || '', children: [node, next()] };
+        node = { type: 'op', op: op, param: p || '', group: '', children: [node, next()] };
       }
       return node;
     }
@@ -1046,10 +1149,67 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     function expression() { return level(LOW_PRECEDENCE, term); }
     function term() { return level(HIGH_PRECEDENCE, factor); }
 
+    /* <grouping attributes> ℱ_{functions}(R) — the grouping attributes come
+       before the symbol, so this has to be tried before a plain relation name. */
+    function aggregation() {
+      var save = i;
+      ws();
+
+      // "F", "group" and "aggregate" are also legal relation names, so they only
+      // count as the operator when a parameter follows them.
+      function readF() {
+        var mark = i;
+        ws();
+        if (s[i] === 'ℱ') { i++; return true; }
+        var w = s[i] === 'F' ? 'F' : word();
+        if (w && (w === 'F' || w.toLowerCase() === 'group' || w.toLowerCase() === 'aggregate')) {
+          var after = i + w.length;
+          while (after < s.length && /\s/.test(s[after])) after++;
+          if (s[after] === '_' || s[after] === '{' || s[after] === '[') { i += w.length; return true; }
+        }
+        i = mark;
+        return false;
+      }
+
+      var grouping = null;
+      if (!readF()) {
+        if (s[i] === '{') grouping = delimited('{', '}');
+        else if (s[i] === '[') grouping = delimited('[', ']');
+        else if (IDENT_DOT.test(s.slice(i))) {
+          var list = [];
+          for (;;) {
+            var m = IDENT_DOT.exec(s.slice(i));
+            if (!m) { i = save; return null; }
+            list.push(m[0]);
+            i += m[0].length;
+            ws();
+            if (s[i] === ',') { i++; ws(); continue; }
+            break;
+          }
+          grouping = list.join(', ');
+        } else { i = save; return null; }
+        if (!readF()) { i = save; return null; }
+      }
+
+      var funcs = param();
+      if (funcs === null) fail('ℱ must be written ℱ_{COUNT(eid)}(...)');
+      ws();
+      if (s[i] !== '(') fail('Expected "(" after ℱ_{' + funcs + '}');
+      i++;
+      ws();
+      var child = null;
+      if (s[i] !== ')') { child = expression(); ws(); }
+      if (s[i] !== ')') fail('Missing a closing ")"');
+      i++;
+      return { type: 'op', op: 'group', param: funcs, group: grouping || '', children: [child] };
+    }
+
     function factor() {
       ws();
       if (i >= s.length) fail('The expression is incomplete');
       if (s[i] === '?') { i++; return null; }              // an empty slot
+      var agg = aggregation();
+      if (agg) return agg;
       if (s[i] === '(') {
         i++;
         ws();
@@ -1091,7 +1251,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         if (s[i] !== ')') { child = expression(); ws(); }   // "()" is an empty slot
         if (s[i] !== ')') fail('Missing a closing ")"');
         i++;
-        return { type: 'op', op: opName, param: p, children: [child] };
+        return { type: 'op', op: opName, param: p, group: '', children: [child] };
       }
 
       var name = ident();
@@ -1108,7 +1268,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   }
 
   // The canonical form parseExpression round-trips; always brace-delimited.
-  function toText(node) {
+  function toText(node, asOperand) {
     if (!node) return '?';
     if (node.type === 'rel') return node.name;
     var meta = OPS[node.op];
@@ -1118,10 +1278,13 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       var inner = toText(child);
       // A binary child already brackets itself; don't double up.
       var bracketed = child && child.type === 'op' && OPS[child.op].arity === 2;
-      return meta.symbol + '_{' + p + '}' + (bracketed ? inner : '(' + inner + ')');
+      var pre = meta.pre && String(node.group || '').trim() ? String(node.group).trim() + ' ' : '';
+      var text = pre + meta.symbol + '_{' + p + '}' + (bracketed ? inner : '(' + inner + ')');
+      // "A ⋈ dept ℱ_{...}(B)" reads as if dept belonged to the ⋈.
+      return pre && asOperand ? '(' + text + ')' : text;
     }
-    return '(' + toText(node.children[0]) + ' ' + meta.symbol + (p ? '_{' + p + '}' : '') +
-           ' ' + toText(node.children[1]) + ')';
+    return '(' + toText(node.children[0], true) + ' ' + meta.symbol + (p ? '_{' + p + '}' : '') +
+           ' ' + toText(node.children[1], true) + ')';
   }
 
   /* ---------- answer checking ---------- */
@@ -1214,8 +1377,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   var R = global.RA.relation;
 
   function rel(name) { return { type: 'rel', name: name }; }
-  function op(name, param, children) {
-    return { type: 'op', op: name, param: param || '', children: children };
+  function op(name, param, children, group) {
+    return { type: 'op', op: name, param: param || '', group: group || '', children: children };
   }
 
   var DATABASES = {
@@ -1715,7 +1878,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     },
     {
       db: 'company',
-      title: 'Final exam',
+      title: 'Everything at once',
       question: 'Return the names of employees who earn less than 90000 and work on ' +
                '<i>every</i> project with a budget over 100000.',
       focus: [],
@@ -1738,6 +1901,108 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             ])
           ])
         ])
+      ])
+    },
+    {
+      db: 'company',
+      chapter: 'Aggregation',
+      title: 'How many?',
+      question: 'Return the number of employees.',
+      focus: ['group'],
+      tip: '<b>ℱ</b> collapses rows into one summary row. The functions go on the right of the ℱ; ' +
+           'leave the box on its left empty to summarise the whole relation at once.',
+      hints: [
+        'Drop ℱ on the canvas and put Employee inside it.',
+        'Write COUNT(eid) in the right-hand box, and leave the left one empty.',
+        'ℱ<sub>COUNT(eid)</sub>(Employee)'
+      ],
+      solution: op('group', 'COUNT(eid)', [rel('Employee')], '')
+    },
+    {
+      db: 'company',
+      title: 'How many each?',
+      question: 'Return the number of employees in each department.',
+      focus: [],
+      tip: 'Whatever you put to the <i>left</i> of the ℱ becomes the grouping: one output row ' +
+           'per distinct value.',
+      hints: [
+        'Put dept in the left-hand box of the ℱ node.',
+        'The result has one row per department, with the count beside it.',
+        '<sub>dept</sub>ℱ<sub>COUNT(eid)</sub>(Employee)'
+      ],
+      solution: op('group', 'COUNT(eid)', [rel('Employee')], 'dept')
+    },
+    {
+      db: 'company',
+      title: 'Two at a time',
+      question: 'Return the lowest and the highest salary in the company, in one row.',
+      focus: [],
+      tip: 'One ℱ can carry several functions, separated by commas: ' +
+           '<code>MIN(salary), MAX(salary)</code>.',
+      hints: [
+        'No grouping attribute — you want a single row for the whole company.',
+        'ℱ<sub>MIN(salary), MAX(salary)</sub>(Employee)'
+      ],
+      solution: op('group', 'MIN(salary), MAX(salary)', [rel('Employee')], '')
+    },
+    {
+      db: 'company',
+      title: 'On average',
+      question: 'Return the average salary of each department.',
+      focus: [],
+      tip: 'The functions are COUNT, SUM, AVG, MIN and MAX. COUNT(*) counts rows.',
+      hints: [
+        'Group by dept, and AVG the salary.',
+        '<sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee)'
+      ],
+      solution: op('group', 'AVG(salary)', [rel('Employee')], 'dept')
+    },
+    {
+      db: 'company',
+      title: 'Filtering the groups',
+      question: 'Return the departments that have more than two employees.',
+      focus: [],
+      tip: 'ℱ names its output columns after the function: COUNT(eid) becomes ' +
+           '<code>COUNT_eid</code>. Once it is a column like any other, σ can filter on it — ' +
+           'this is what SQL calls HAVING.',
+      hints: [
+        'First build the per-department counts, exactly as you did two levels ago.',
+        'Then wrap that in σ with the condition COUNT_eid > 2, and project the department.',
+        'π<sub>dept</sub>(σ<sub>COUNT_eid &gt; 2</sub>(<sub>dept</sub>ℱ<sub>COUNT(eid)</sub>(Employee)))'
+      ],
+      solution: op('project', 'dept', [
+        op('select', 'COUNT_eid > 2', [op('group', 'COUNT(eid)', [rel('Employee')], 'dept')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Summing across a join',
+      question: 'Return each employee name with the total number of hours they are billed for.',
+      focus: [],
+      tip: 'Aggregation takes any relation, including one you have just joined together.',
+      hints: [
+        'Join Employee to WorksOn first — hours lives in WorksOn, the name in Employee.',
+        'Then group by ename and SUM the hours.',
+        '<sub>ename</sub>ℱ<sub>SUM(hours)</sub>(Employee ⋈ WorksOn)'
+      ],
+      solution: op('group', 'SUM(hours)', [
+        op('join', '', [rel('Employee'), rel('WorksOn')])
+      ], 'ename')
+    },
+    {
+      db: 'school',
+      title: 'Final exam',
+      question: 'Return each course title together with the number of students enrolled in it.',
+      focus: [],
+      tip: 'Count first, then join to get the titles. A course nobody is enrolled in has no rows ' +
+           'to group, so it will not appear at all — which is exactly what level 18 was about.',
+      hints: [
+        'Group Enrolled by cid and COUNT the students.',
+        'That gives you cid and COUNT_sid; join it to Course to reach the titles.',
+        'π<sub>title, COUNT_sid</sub>(Course ⋈ (<sub>cid</sub>ℱ<sub>COUNT(sid)</sub>(Enrolled)))'
+      ],
+      solution: op('project', 'title, COUNT_sid', [
+        op('join', '', [rel('Course'), op('group', 'COUNT(sid)', [rel('Enrolled')], 'cid')])
       ])
     }
   ];
@@ -1807,14 +2072,14 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     if (!node) return null;
     if (node.type === 'rel') return { type: 'rel', name: node.name };
     return {
-      type: 'op', op: node.op, param: node.param || '',
+      type: 'op', op: node.op, param: node.param || '', group: node.group || '',
       children: (node.children || []).map(clone)
     };
   }
 
   function newOpNode(opName) {
     var arity = OPS[opName].arity;
-    return { type: 'op', op: opName, param: '', children: new Array(arity).fill(null) };
+    return { type: 'op', op: opName, param: '', group: '', children: new Array(arity).fill(null) };
   }
 
   /* ---------- tree addressing ---------- */
@@ -1966,25 +2231,17 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       head.innerHTML = '<span class="node-sym">' + esc(node.name) + '</span>';
     } else {
       var meta = OPS[node.op];
-      head.innerHTML = '<span class="node-sym" title="' + esc(meta.name) + '">' + meta.symbol + '</span>';
+      var symbol = document.createElement('span');
+      symbol.className = 'node-sym';
+      symbol.title = meta.name;
+      symbol.textContent = meta.symbol;
+      // Aggregation writes its grouping attributes to the left of the symbol.
+      if (meta.pre) {
+        head.appendChild(fieldInput(node, 'group', path, meta, meta.preLabel, meta.prePlaceholder, true));
+      }
+      head.appendChild(symbol);
       if (meta.param !== 'none') {
-        var input = document.createElement('input');
-        input.className = 'param-input';
-        input.type = 'text';
-        input.value = node.param || '';
-        input.placeholder = meta.placeholder || meta.paramLabel;
-        input.dataset.path = JSON.stringify(path);
-        input.setAttribute('aria-label', meta.name + ' ' + meta.paramLabel);
-        input.addEventListener('input', function () {
-          node.param = input.value;
-          refreshOutput();
-        });
-        input.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') { e.preventDefault(); check(); }
-        });
-        // Typing must not be hijacked by the node's own drag handlers.
-        input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-        head.appendChild(input);
+        head.appendChild(fieldInput(node, 'param', path, meta, meta.paramLabel, meta.placeholder, false));
       }
     }
 
@@ -2012,6 +2269,26 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
     attachDropTarget(wrap, path);
     return wrap;
+  }
+
+  function fieldInput(node, field, path, meta, label, placeholder, isPre) {
+    var input = document.createElement('input');
+    input.className = 'param-input' + (isPre ? ' pre-input' : '');
+    input.type = 'text';
+    input.value = node[field] || '';
+    input.placeholder = placeholder || label;
+    input.dataset.path = JSON.stringify(path);
+    input.setAttribute('aria-label', meta.name + ' ' + label);
+    input.addEventListener('input', function () {
+      node[field] = input.value;
+      refreshOutput();
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); check(); }
+    });
+    // Typing must not be hijacked by the node's own drag handlers.
+    input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    return input;
   }
 
   function buildSlot(path) {
@@ -2122,10 +2399,13 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     { word: 'except',     insert: '− ' },
     { word: 'product',    insert: '× ' }, { word: 'times',      insert: '× ' },
     { word: 'cross',      insert: '× ' },
-    { word: 'divide',     insert: '÷ ' }
+    { word: 'divide',     insert: '÷ ' },
+    { word: 'group',      insert: 'ℱ_{}()', caret: 3 },
+    { word: 'aggregate',  insert: 'ℱ_{}()', caret: 3 }
   ].map(function (c) {
     var opName = { 'π': 'project', 'σ': 'select', 'ρ': 'rename', '⋈': 'join', '∪': 'union',
-                   '∩': 'intersect', '−': 'difference', '×': 'product', '÷': 'divide' }[c.insert[0]];
+                   '∩': 'intersect', '−': 'difference', '×': 'product', '÷': 'divide',
+                   'ℱ': 'group' }[c.insert[0]];
     return { kind: 'op', word: c.word, insert: c.insert, caret: c.caret,
              symbol: c.insert[0], hint: OPS[opName].hint };
   });
@@ -2152,6 +2432,10 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     var info = DATABASES[level().db];
     var list = [];
     if (inParam) {
+      ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'].forEach(function (fn) {
+        list.push({ kind: 'fn', word: fn, insert: fn + '()', caret: fn.length + 1,
+                    symbol: 'ƒ', hint: 'aggregate function' });
+      });
       var seen = {};
       info.relations.forEach(function (r) {
         r.attrs.forEach(function (a) {

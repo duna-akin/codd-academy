@@ -58,6 +58,8 @@ Twenty-five puzzles in five chapters:
 | Products and division | 14–16 | ρ + × to compare a relation with itself, ÷ for "for all" |
 | Advanced | 17–25 | theta joins, self-joins for "at least two" and "exactly one", max without aggregation, "only", division by a derived relation, universal quantification by double negation |
 
+| Aggregation | 26–32 | `ℱ` with and without grouping, several functions at once, filtering groups (SQL's HAVING), aggregating a join |
+
 The advanced chapter is where relational algebra stops being a notation for SQL and starts being a
 logic: with no aggregation and no counting, `MAX` becomes "nobody beats me", `only` becomes "has no
 counterexample", and `for all` becomes either ÷ or a difference of two differences.
@@ -77,6 +79,8 @@ You never have to find the Greek keys. Type a few letters and press <kbd>Tab</kb
 | `sel` | `σ_{}()` |
 | `ren` | `ρ_{}()` |
 | `un`, `int`, `min`, `prod`, `div`, `join` | `∪ ∩ − × ÷ ⋈` |
+| `group` | `ℱ_{}()` |
+| `cou`, `su`, `av` … *inside* `{}` | `COUNT()`, `SUM()`, `AVG()` |
 
 The menu knows where the cursor is: **inside** `{}` it offers attribute names, **outside** it offers
 relation names and operators. With no menu open, <kbd>Tab</kbd> jumps to the next empty spot in the
@@ -106,6 +110,7 @@ Every operator has an ASCII spelling, so no Greek keyboard is needed:
 | product | `×` | `*`, `product`, `times`, `cross` |
 | join | `⋈` | `join`, `\|><\|`, `\|x\|` |
 | divide | `÷` | `/`, `divide` |
+| aggregate | `ℱ` | `F`, `group`, `aggregate` |
 
 Parameters go in `_{...}`, `{...}` or `[...]`; the bare form `π_ename(R)` works too, but a condition
 containing parentheses needs the braces. Binary operators bind tighter for `× ⋈ ÷` than for
@@ -118,6 +123,24 @@ The interface uses Lafayette College's palette: PMS 202 maroon `#822433` with th
 `#65001C`, `#910029`, light blue `#4EA8D8`, warm gray `#A2998B` and pale gray `#E8E6E2`. On the dark
 ground the brand maroon is too dark to read as text, so `--accent` is a tint of it and the solid
 maroons are used as fills behind white. All of it lives in the `:root` block of `src/styles.css`.
+
+## Aggregation
+
+`ℱ` is written with the grouping attributes on its **left** and the function list on its **right**,
+following Elmasri & Navathe:
+
+    dept ℱ_{COUNT(eid), AVG(salary)}(Employee)     one row per department
+    ℱ_{MIN(salary), MAX(salary)}(Employee)         no grouping: one row for everything
+
+`COUNT`, `SUM`, `AVG` (or `AVERAGE`), `MIN` and `MAX` are available, and `COUNT(*)` counts rows.
+Output columns are named after the call — `COUNT(eid)` becomes `COUNT_eid`, and `COUNT(*)` becomes
+`COUNT` — so they are ordinary attributes afterwards, which is how you filter groups:
+
+    π_{dept}(σ_{COUNT_eid > 2}(dept ℱ_{COUNT(eid)}(Employee)))
+
+That is the relational-algebra spelling of SQL's `HAVING`. Note that groups are built only from rows
+that exist: a course nobody is enrolled in contributes no rows to `Enrolled`, so it has no group and
+never appears in the result.
 
 ## Conditions
 

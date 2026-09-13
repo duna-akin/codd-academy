@@ -114,6 +114,14 @@
     whole query. <kbd>↑</kbd><kbd>↓</kbd> pick, <kbd>Esc</kbd> dismisses, <kbd>Enter</kbd> checks.
   </p>
   <p>
+    <b>Aggregation:</b> <code>ℱ</code> has two boxes — grouping attributes on its
+    <i>left</i>, functions on its right: <code>dept ℱ COUNT(eid), AVG(salary)</code> gives one row
+    per department. Leave the left box empty to summarise everything in a single row. Functions are
+    <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>, <code>MIN</code> and <code>MAX</code>;
+    the output columns are named after them (<code>COUNT_eid</code>), so σ can filter on them the
+    way SQL's HAVING does. Type <code>group</code> for the ℱ.
+  </p>
+  <p>
     <b>Typing:</b> the <i>Type it</i> box takes standard notation —
     <code>π_{ename}(σ_{salary &gt; 60000}(Employee))</code> — and the canvas follows along as you type.
     No Greek keyboard needed: <code>project</code>, <code>select</code>, <code>rename</code>,

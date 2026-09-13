@@ -165,6 +165,29 @@ JSDOM.fromFile(path, {
   if (!over.defaultPrevented || expr.selectionStart !== 8) errors.push('closing-paren type-over failed');
   expr.blur();
 
+  // 7. Aggregation: one node, two fields — grouping attributes left of the ℱ.
+  click(doc.querySelectorAll('.pill')[26]);         // level 27: How many each?
+  expr.focus();
+  expr.value = 'dept group_{COUNT(eid)}(Employee)'; // ASCII spelling of ℱ
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  console.log('agg   :', 'grouping fields on canvas =', doc.querySelectorAll('.pre-input').length,
+              '| rendered =', text('#formula').trim(),
+              '| rows =', doc.querySelectorAll('#output tbody tr').length,
+              '| cols =', [...doc.querySelectorAll('#output thead th')].map(n => n.textContent).join(','));
+  if (doc.querySelectorAll('.pre-input').length !== 1) errors.push('aggregate node lacks a grouping field');
+  click($('#btnCheck'));
+  console.log('check4:', text('#feedback').trim());
+  if (!/Correct/.test(text('#feedback'))) errors.push('a typed aggregate was not accepted');
+
+  // Inside {} the menu offers aggregate functions as well as attributes.
+  expr.focus();
+  expr.value = 'dept group_{CO}(Employee)';
+  expr.setSelectionRange(14, 14);                   // inside the braces, just after "CO"
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  console.log('fnmenu:', shown());
+  if (!/COUNT/.test(shown())) errors.push('no aggregate-function suggestions inside {}');
+  expr.blur();
+
   // The walk below assumes it starts at level 1.
   click(doc.querySelectorAll('.pill')[0]);
 

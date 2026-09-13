@@ -58,14 +58,14 @@
     if (!node) return null;
     if (node.type === 'rel') return { type: 'rel', name: node.name };
     return {
-      type: 'op', op: node.op, param: node.param || '',
+      type: 'op', op: node.op, param: node.param || '', group: node.group || '',
       children: (node.children || []).map(clone)
     };
   }
 
   function newOpNode(opName) {
     var arity = OPS[opName].arity;
-    return { type: 'op', op: opName, param: '', children: new Array(arity).fill(null) };
+    return { type: 'op', op: opName, param: '', group: '', children: new Array(arity).fill(null) };
   }
 
   /* ---------- tree addressing ---------- */
@@ -217,25 +217,17 @@
       head.innerHTML = '<span class="node-sym">' + esc(node.name) + '</span>';
     } else {
       var meta = OPS[node.op];
-      head.innerHTML = '<span class="node-sym" title="' + esc(meta.name) + '">' + meta.symbol + '</span>';
+      var symbol = document.createElement('span');
+      symbol.className = 'node-sym';
+      symbol.title = meta.name;
+      symbol.textContent = meta.symbol;
+      // Aggregation writes its grouping attributes to the left of the symbol.
+      if (meta.pre) {
+        head.appendChild(fieldInput(node, 'group', path, meta, meta.preLabel, meta.prePlaceholder, true));
+      }
+      head.appendChild(symbol);
       if (meta.param !== 'none') {
-        var input = document.createElement('input');
-        input.className = 'param-input';
-        input.type = 'text';
-        input.value = node.param || '';
-        input.placeholder = meta.placeholder || meta.paramLabel;
-        input.dataset.path = JSON.stringify(path);
-        input.setAttribute('aria-label', meta.name + ' ' + meta.paramLabel);
-        input.addEventListener('input', function () {
-          node.param = input.value;
-          refreshOutput();
-        });
-        input.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') { e.preventDefault(); check(); }
-        });
-        // Typing must not be hijacked by the node's own drag handlers.
-        input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-        head.appendChild(input);
+        head.appendChild(fieldInput(node, 'param', path, meta, meta.paramLabel, meta.placeholder, false));
       }
     }
 
@@ -263,6 +255,26 @@
 
     attachDropTarget(wrap, path);
     return wrap;
+  }
+
+  function fieldInput(node, field, path, meta, label, placeholder, isPre) {
+    var input = document.createElement('input');
+    input.className = 'param-input' + (isPre ? ' pre-input' : '');
+    input.type = 'text';
+    input.value = node[field] || '';
+    input.placeholder = placeholder || label;
+    input.dataset.path = JSON.stringify(path);
+    input.setAttribute('aria-label', meta.name + ' ' + label);
+    input.addEventListener('input', function () {
+      node[field] = input.value;
+      refreshOutput();
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); check(); }
+    });
+    // Typing must not be hijacked by the node's own drag handlers.
+    input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    return input;
   }
 
   function buildSlot(path) {
@@ -373,10 +385,13 @@
     { word: 'except',     insert: '− ' },
     { word: 'product',    insert: '× ' }, { word: 'times',      insert: '× ' },
     { word: 'cross',      insert: '× ' },
-    { word: 'divide',     insert: '÷ ' }
+    { word: 'divide',     insert: '÷ ' },
+    { word: 'group',      insert: 'ℱ_{}()', caret: 3 },
+    { word: 'aggregate',  insert: 'ℱ_{}()', caret: 3 }
   ].map(function (c) {
     var opName = { 'π': 'project', 'σ': 'select', 'ρ': 'rename', '⋈': 'join', '∪': 'union',
-                   '∩': 'intersect', '−': 'difference', '×': 'product', '÷': 'divide' }[c.insert[0]];
+                   '∩': 'intersect', '−': 'difference', '×': 'product', '÷': 'divide',
+                   'ℱ': 'group' }[c.insert[0]];
     return { kind: 'op', word: c.word, insert: c.insert, caret: c.caret,
              symbol: c.insert[0], hint: OPS[opName].hint };
   });
@@ -403,6 +418,10 @@
     var info = DATABASES[level().db];
     var list = [];
     if (inParam) {
+      ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'].forEach(function (fn) {
+        list.push({ kind: 'fn', word: fn, insert: fn + '()', caret: fn.length + 1,
+                    symbol: 'ƒ', hint: 'aggregate function' });
+      });
       var seen = {};
       info.relations.forEach(function (r) {
         r.attrs.forEach(function (a) {

@@ -6,8 +6,8 @@
   var R = global.RA.relation;
 
   function rel(name) { return { type: 'rel', name: name }; }
-  function op(name, param, children) {
-    return { type: 'op', op: name, param: param || '', children: children };
+  function op(name, param, children, group) {
+    return { type: 'op', op: name, param: param || '', group: group || '', children: children };
   }
 
   var DATABASES = {
@@ -507,7 +507,7 @@
     },
     {
       db: 'company',
-      title: 'Final exam',
+      title: 'Everything at once',
       question: 'Return the names of employees who earn less than 90000 and work on ' +
                '<i>every</i> project with a budget over 100000.',
       focus: [],
@@ -530,6 +530,108 @@
             ])
           ])
         ])
+      ])
+    },
+    {
+      db: 'company',
+      chapter: 'Aggregation',
+      title: 'How many?',
+      question: 'Return the number of employees.',
+      focus: ['group'],
+      tip: '<b>ℱ</b> collapses rows into one summary row. The functions go on the right of the ℱ; ' +
+           'leave the box on its left empty to summarise the whole relation at once.',
+      hints: [
+        'Drop ℱ on the canvas and put Employee inside it.',
+        'Write COUNT(eid) in the right-hand box, and leave the left one empty.',
+        'ℱ<sub>COUNT(eid)</sub>(Employee)'
+      ],
+      solution: op('group', 'COUNT(eid)', [rel('Employee')], '')
+    },
+    {
+      db: 'company',
+      title: 'How many each?',
+      question: 'Return the number of employees in each department.',
+      focus: [],
+      tip: 'Whatever you put to the <i>left</i> of the ℱ becomes the grouping: one output row ' +
+           'per distinct value.',
+      hints: [
+        'Put dept in the left-hand box of the ℱ node.',
+        'The result has one row per department, with the count beside it.',
+        '<sub>dept</sub>ℱ<sub>COUNT(eid)</sub>(Employee)'
+      ],
+      solution: op('group', 'COUNT(eid)', [rel('Employee')], 'dept')
+    },
+    {
+      db: 'company',
+      title: 'Two at a time',
+      question: 'Return the lowest and the highest salary in the company, in one row.',
+      focus: [],
+      tip: 'One ℱ can carry several functions, separated by commas: ' +
+           '<code>MIN(salary), MAX(salary)</code>.',
+      hints: [
+        'No grouping attribute — you want a single row for the whole company.',
+        'ℱ<sub>MIN(salary), MAX(salary)</sub>(Employee)'
+      ],
+      solution: op('group', 'MIN(salary), MAX(salary)', [rel('Employee')], '')
+    },
+    {
+      db: 'company',
+      title: 'On average',
+      question: 'Return the average salary of each department.',
+      focus: [],
+      tip: 'The functions are COUNT, SUM, AVG, MIN and MAX. COUNT(*) counts rows.',
+      hints: [
+        'Group by dept, and AVG the salary.',
+        '<sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee)'
+      ],
+      solution: op('group', 'AVG(salary)', [rel('Employee')], 'dept')
+    },
+    {
+      db: 'company',
+      title: 'Filtering the groups',
+      question: 'Return the departments that have more than two employees.',
+      focus: [],
+      tip: 'ℱ names its output columns after the function: COUNT(eid) becomes ' +
+           '<code>COUNT_eid</code>. Once it is a column like any other, σ can filter on it — ' +
+           'this is what SQL calls HAVING.',
+      hints: [
+        'First build the per-department counts, exactly as you did two levels ago.',
+        'Then wrap that in σ with the condition COUNT_eid > 2, and project the department.',
+        'π<sub>dept</sub>(σ<sub>COUNT_eid &gt; 2</sub>(<sub>dept</sub>ℱ<sub>COUNT(eid)</sub>(Employee)))'
+      ],
+      solution: op('project', 'dept', [
+        op('select', 'COUNT_eid > 2', [op('group', 'COUNT(eid)', [rel('Employee')], 'dept')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Summing across a join',
+      question: 'Return each employee name with the total number of hours they are billed for.',
+      focus: [],
+      tip: 'Aggregation takes any relation, including one you have just joined together.',
+      hints: [
+        'Join Employee to WorksOn first — hours lives in WorksOn, the name in Employee.',
+        'Then group by ename and SUM the hours.',
+        '<sub>ename</sub>ℱ<sub>SUM(hours)</sub>(Employee ⋈ WorksOn)'
+      ],
+      solution: op('group', 'SUM(hours)', [
+        op('join', '', [rel('Employee'), rel('WorksOn')])
+      ], 'ename')
+    },
+    {
+      db: 'school',
+      title: 'Final exam',
+      question: 'Return each course title together with the number of students enrolled in it.',
+      focus: [],
+      tip: 'Count first, then join to get the titles. A course nobody is enrolled in has no rows ' +
+           'to group, so it will not appear at all — which is exactly what level 18 was about.',
+      hints: [
+        'Group Enrolled by cid and COUNT the students.',
+        'That gives you cid and COUNT_sid; join it to Course to reach the titles.',
+        'π<sub>title, COUNT_sid</sub>(Course ⋈ (<sub>cid</sub>ℱ<sub>COUNT(sid)</sub>(Enrolled)))'
+      ],
+      solution: op('project', 'title, COUNT_sid', [
+        op('join', '', [rel('Course'), op('group', 'COUNT(sid)', [rel('Enrolled')], 'cid')])
       ])
     }
   ];
