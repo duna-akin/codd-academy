@@ -14,7 +14,8 @@
     usedHelp: false,
     solved: {},          // levelIndex -> 'gold' | 'silver'
     armed: null,         // {kind:'op'|'rel', value:string} for click-to-place
-    barOpen: true        // is the level bar expanded?
+    barOpen: true,       // is the level bar expanded?
+    resultOpen: true     // show the live result, or work blind?
   };
 
   var el = {};
@@ -29,13 +30,15 @@
         state.levelIndex = Math.min(Math.max(saved.levelIndex, 0), LEVELS.length - 1);
       }
       if (typeof saved.barOpen === 'boolean') state.barOpen = saved.barOpen;
+      if (typeof saved.resultOpen === 'boolean') state.resultOpen = saved.resultOpen;
     } catch (e) { /* fresh start */ }
   }
 
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        solved: state.solved, levelIndex: state.levelIndex, barOpen: state.barOpen
+        solved: state.solved, levelIndex: state.levelIndex,
+        barOpen: state.barOpen, resultOpen: state.resultOpen
       }));
     } catch (e) { /* private mode: progress simply will not persist */ }
   }
@@ -553,6 +556,14 @@
     }
     var res = evaluateTree();
     if (res.ok) {
+      // Hidden means hidden: the row count alone gives the game away.
+      if (!state.resultOpen) {
+        el.outputMeta.textContent = '';
+        el.output.className = 'output output-muted';
+        el.output.innerHTML = '<p class="placeholder">Result hidden — work it out, then press ' +
+          '<b>Check answer</b>.</p>';
+        return;
+      }
       el.outputMeta.textContent = res.relation.attrs.length + ' column' +
         (res.relation.attrs.length === 1 ? '' : 's') + ' · ' +
         res.relation.rows.length + ' row' + (res.relation.rows.length === 1 ? '' : 's');
@@ -665,6 +676,17 @@
     el.barNow.textContent = (state.levelIndex + 1) + ' · ' + level().title;
   }
 
+  /* Errors stay visible even when the result is hidden: "there is no attribute
+     nope" is about whether the query is valid, not about what the answer is. */
+  function setResultOpen(open) {
+    state.resultOpen = open;
+    el.resultToggle.setAttribute('aria-expanded', String(open));
+    el.resultToggle.title = open ? 'Hide the live result' : 'Show the live result';
+    el.resultToggle.classList.toggle('collapsed', !open);
+    save();
+    refreshOutput();
+  }
+
   function setBarOpen(open) {
     state.barOpen = open;
     el.levelbar.classList.toggle('collapsed', !open);
@@ -753,7 +775,7 @@
     ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
      'tables', 'palette', 'canvas', 'formula', 'exprInput', 'exprError',
      'exprSuggest', 'exprMirror',
-     'output', 'outputMeta', 'feedback', 'confetti'
+     'output', 'outputMeta', 'resultToggle', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
     el.prev = document.getElementById('btnPrev');
@@ -761,6 +783,7 @@
     el.hint = document.getElementById('btnHint');
 
     el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
+    el.resultToggle.addEventListener('click', function () { setResultOpen(!state.resultOpen); });
     el.exprInput.addEventListener('input', function () { onExprInput(); });
     el.exprInput.addEventListener('blur', function () {
       closeSuggest();
@@ -823,6 +846,7 @@
     load();
     state.usedHelp = state.solved[state.levelIndex] === 'silver';
     setBarOpen(state.barOpen);
+    setResultOpen(state.resultOpen);
     render();
   }
 

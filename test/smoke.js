@@ -188,6 +188,52 @@ JSDOM.fromFile(path, {
   if (!/COUNT/.test(shown())) errors.push('no aggregate-function suggestions inside {}');
   expr.blur();
 
+  // 8. The result panel hides, so a student can work without the live answer.
+  click(doc.querySelectorAll('.pill')[1]);          // level 2: Just the names
+  expr.focus();
+  expr.value = 'π_{ename}(Employee)';
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  expr.blur();
+  const visibleRows = doc.querySelectorAll('#output tbody tr').length;
+  const resultToggle = $('#resultToggle');
+  click(resultToggle);
+  const hiddenRows = doc.querySelectorAll('#output tbody tr').length;
+  let savedState = {};
+  try { savedState = JSON.parse(window.localStorage.getItem('relational-algebra-game-v1') || '{}'); }
+  catch (e) { /* checked elsewhere */ }
+  console.log('hide  :', visibleRows, 'rows ->', hiddenRows, '| meta =', JSON.stringify(text('#outputMeta')),
+              '| aria-expanded =', resultToggle.getAttribute('aria-expanded'),
+              '| persisted =', savedState.resultOpen);
+  if (hiddenRows !== 0 || text('#outputMeta') !== '' || savedState.resultOpen !== false) {
+    errors.push('hiding the result should hide the rows, the row count, and persist');
+  }
+
+  // An invalid query still explains itself: that is validity, not the answer.
+  expr.focus();
+  expr.value = 'π_{nope}(Employee)';
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  console.log('blind :', 'error still shown =', !!$('#output .error-msg'),
+              '|', text('#output').trim().slice(0, 48));
+  if (!$('#output .error-msg')) errors.push('errors should survive hiding the result');
+
+  // Checking an answer works while blind.
+  expr.value = 'π_{ename}(Employee)';
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  expr.blur();
+  click($('#btnCheck'));
+  console.log('check5:', text('#feedback').trim(), '| rows still hidden =',
+              doc.querySelectorAll('#output tbody tr').length === 0);
+  if (!/Correct/.test(text('#feedback')) || doc.querySelectorAll('#output tbody tr').length !== 0) {
+    errors.push('checking while blind should work and not reveal the table');
+  }
+
+  click(resultToggle);                                    // back to interactive for the walk below
+  console.log('show  :', doc.querySelectorAll('#output tbody tr').length, 'rows |',
+              text('#outputMeta'));
+  if (doc.querySelectorAll('#output tbody tr').length !== visibleRows) {
+    errors.push('reopening the result should bring the table back');
+  }
+
   // The walk below assumes it starts at level 1.
   click(doc.querySelectorAll('.pill')[0]);
 

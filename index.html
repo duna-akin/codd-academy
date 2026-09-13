@@ -135,6 +135,13 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
 .block { background: var(--bg-raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
 .block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.block-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0; border: none; background: none; cursor: pointer; color: inherit; font: inherit;
+}
+.block-toggle:hover .block-title { color: var(--text); }
+.block-toggle .chev { font-size: 12px; color: var(--accent); transition: transform .18s; }
+.block-toggle.collapsed .chev { transform: rotate(-90deg); }
 .block-title { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim); }
 .block-title span { text-transform: none; letter-spacing: 0; color: var(--accent); }
 .block-sub { margin: 4px 0 10px; font-size: 12.5px; color: var(--text-faint); }
@@ -457,7 +464,11 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
     <section class="block">
       <div class="block-head">
-        <h2 class="block-title">Result</h2>
+        <button id="resultToggle" class="block-toggle" type="button"
+                aria-expanded="true" aria-controls="output">
+          <span class="chev" aria-hidden="true">▾</span>
+          <h2 class="block-title">Result</h2>
+        </button>
         <span id="outputMeta" class="output-meta"></span>
       </div>
       <div id="output" class="output output-muted"></div>
@@ -470,6 +481,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     <b>Conditions:</b> <code>salary &gt; 60000</code>, <code>dept = 'Sales'</code>, combine with
     <code>AND</code> / <code>OR</code> / <code>NOT</code> and parentheses. Text values need quotes.
     <b>Deleting</b> an operator promotes whatever was inside it, so you can peel a query apart layer by layer.
+    <b>Result</b> collapses from its header if you would rather work without seeing the answer as you build it.
   </p>
   <p>
     <b>Tab to complete:</b> type <code>proj</code> in the <i>Type it</i> box and press
@@ -2116,7 +2128,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     usedHelp: false,
     solved: {},          // levelIndex -> 'gold' | 'silver'
     armed: null,         // {kind:'op'|'rel', value:string} for click-to-place
-    barOpen: true        // is the level bar expanded?
+    barOpen: true,       // is the level bar expanded?
+    resultOpen: true     // show the live result, or work blind?
   };
 
   var el = {};
@@ -2131,13 +2144,15 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         state.levelIndex = Math.min(Math.max(saved.levelIndex, 0), LEVELS.length - 1);
       }
       if (typeof saved.barOpen === 'boolean') state.barOpen = saved.barOpen;
+      if (typeof saved.resultOpen === 'boolean') state.resultOpen = saved.resultOpen;
     } catch (e) { /* fresh start */ }
   }
 
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        solved: state.solved, levelIndex: state.levelIndex, barOpen: state.barOpen
+        solved: state.solved, levelIndex: state.levelIndex,
+        barOpen: state.barOpen, resultOpen: state.resultOpen
       }));
     } catch (e) { /* private mode: progress simply will not persist */ }
   }
@@ -2655,6 +2670,14 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     }
     var res = evaluateTree();
     if (res.ok) {
+      // Hidden means hidden: the row count alone gives the game away.
+      if (!state.resultOpen) {
+        el.outputMeta.textContent = '';
+        el.output.className = 'output output-muted';
+        el.output.innerHTML = '<p class="placeholder">Result hidden — work it out, then press ' +
+          '<b>Check answer</b>.</p>';
+        return;
+      }
       el.outputMeta.textContent = res.relation.attrs.length + ' column' +
         (res.relation.attrs.length === 1 ? '' : 's') + ' · ' +
         res.relation.rows.length + ' row' + (res.relation.rows.length === 1 ? '' : 's');
@@ -2767,6 +2790,17 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     el.barNow.textContent = (state.levelIndex + 1) + ' · ' + level().title;
   }
 
+  /* Errors stay visible even when the result is hidden: "there is no attribute
+     nope" is about whether the query is valid, not about what the answer is. */
+  function setResultOpen(open) {
+    state.resultOpen = open;
+    el.resultToggle.setAttribute('aria-expanded', String(open));
+    el.resultToggle.title = open ? 'Hide the live result' : 'Show the live result';
+    el.resultToggle.classList.toggle('collapsed', !open);
+    save();
+    refreshOutput();
+  }
+
   function setBarOpen(open) {
     state.barOpen = open;
     el.levelbar.classList.toggle('collapsed', !open);
@@ -2855,7 +2889,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
      'tables', 'palette', 'canvas', 'formula', 'exprInput', 'exprError',
      'exprSuggest', 'exprMirror',
-     'output', 'outputMeta', 'feedback', 'confetti'
+     'output', 'outputMeta', 'resultToggle', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
     el.prev = document.getElementById('btnPrev');
@@ -2863,6 +2897,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     el.hint = document.getElementById('btnHint');
 
     el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
+    el.resultToggle.addEventListener('click', function () { setResultOpen(!state.resultOpen); });
     el.exprInput.addEventListener('input', function () { onExprInput(); });
     el.exprInput.addEventListener('blur', function () {
       closeSuggest();
@@ -2925,6 +2960,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     load();
     state.usedHelp = state.solved[state.levelIndex] === 'silver';
     setBarOpen(state.barOpen);
+    setResultOpen(state.resultOpen);
     render();
   }
 

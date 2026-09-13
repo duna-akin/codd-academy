@@ -40,6 +40,10 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
 - **Type it instead, if you prefer.** The *Type it* box under the canvas accepts standard notation,
   and the two stay in sync: typing rebuilds the tree, dragging rewrites the text. See
   [Typing expressions](#typing-expressions).
+- **Hide the result to work blind.** The live result table is a fine teaching aid and a bad crutch,
+  so the **Result** header collapses it. Errors stay visible while it is hidden — whether a query is
+  *valid* is not the same as what its answer is — but the table and the row count go away, and
+  **Check answer** still works. The choice is remembered.
 - **Every level is open from the start.** Nothing has to be unlocked — click any level in the bar at
   the top and go straight to it. Collapse that bar with the **Levels** header when you want the room;
   it remembers whether you left it open.

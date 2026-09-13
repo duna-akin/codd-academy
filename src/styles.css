@@ -128,6 +128,13 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
 .block { background: var(--bg-raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
 .block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.block-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0; border: none; background: none; cursor: pointer; color: inherit; font: inherit;
+}
+.block-toggle:hover .block-title { color: var(--text); }
+.block-toggle .chev { font-size: 12px; color: var(--accent); transition: transform .18s; }
+.block-toggle.collapsed .chev { transform: rotate(-90deg); }
 .block-title { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim); }
 .block-title span { text-transform: none; letter-spacing: 0; color: var(--accent); }
 .block-sub { margin: 4px 0 10px; font-size: 12.5px; color: var(--text-faint); }

@@ -92,7 +92,11 @@
 
     <section class="block">
       <div class="block-head">
-        <h2 class="block-title">Result</h2>
+        <button id="resultToggle" class="block-toggle" type="button"
+                aria-expanded="true" aria-controls="output">
+          <span class="chev" aria-hidden="true">▾</span>
+          <h2 class="block-title">Result</h2>
+        </button>
         <span id="outputMeta" class="output-meta"></span>
       </div>
       <div id="output" class="output output-muted"></div>
@@ -105,6 +109,7 @@
     <b>Conditions:</b> <code>salary &gt; 60000</code>, <code>dept = 'Sales'</code>, combine with
     <code>AND</code> / <code>OR</code> / <code>NOT</code> and parentheses. Text values need quotes.
     <b>Deleting</b> an operator promotes whatever was inside it, so you can peel a query apart layer by layer.
+    <b>Result</b> collapses from its header if you would rather work without seeing the answer as you build it.
   </p>
   <p>
     <b>Tab to complete:</b> type <code>proj</code> in the <i>Type it</i> box and press
