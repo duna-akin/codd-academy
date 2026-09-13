@@ -7,11 +7,19 @@ checked against the expected answer.
 
 ## Running it
 
-Open `index.html` in a browser. There is no build step and no server required.
+Open `index.html` in a browser — double-click it, or:
 
-    xdg-open index.html          # or just double-click the file
+    xdg-open index.html
 
-To run it over HTTP instead: `npm run serve`, then visit http://localhost:8080.
+`index.html` is fully self-contained (CSS and JS inlined, no external requests), so it also works
+from a USB stick, over a file share, or in a sandboxed browser. If your browser is installed via
+Flatpak or Snap, opening a file through the desktop portal grants access to *that one file only* —
+which is why a page split across `styles.css` and `js/*.js` renders unstyled and inert there. The
+single file sidesteps that entirely.
+
+Serving it over HTTP also works, and is the other way around a sandboxed browser:
+
+    npm run serve                # then visit http://localhost:8080
 
 ## How the game works
 
@@ -36,24 +44,31 @@ parentheses. The symbols `∧ ∨ ¬ && || !` work too. Text values must be quot
 
 ## Layout
 
-    index.html       markup
-    styles.css       all styling
-    js/engine.js     relational algebra engine: relations, operators, condition parser, answer checking
-    js/levels.js     the two databases and the 16 puzzles (each solution is an expression tree)
-    js/app.js        UI: drag and drop, tree editing, live evaluation, progress
-    test/smoke.js    end-to-end test that drives the real UI in jsdom
+Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
+
+    index.html               BUILT — do not edit by hand; regenerate with `npm run build`
+    build.js                 inlines src/ into the single-file index.html
+    src/index.template.html  markup, with placeholders for the inlined CSS and JS
+    src/styles.css           all styling
+    src/engine.js            relational algebra engine: relations, operators, condition parser, checking
+    src/levels.js            the two databases and the 16 puzzles (each solution is an expression tree)
+    src/app.js               UI: drag and drop, tree editing, live evaluation, progress
+    test/smoke.js            end-to-end test that drives the real UI in jsdom
 
 ## Tests
 
     npm install      # jsdom, for the smoke test only — the game itself has no dependencies
-    npm test
+    npm test         # builds, then drives the built index.html
 
 The smoke test boots the page, places nodes by click and by drop, checks a wrong answer and a
 broken condition, then solves all 16 levels through the UI and asserts there are no console errors.
+Point it at any copy of the built file to prove that copy stands alone:
+
+    node test/smoke.js /some/other/place/index.html
 
 ## Adding a level
 
-Append to `LEVELS` in `js/levels.js`. Solutions are expression trees built with the `rel()` and
+Append to `LEVELS` in `src/levels.js`, then `npm run build`. Solutions are expression trees built with the `rel()` and
 `op()` helpers, e.g.
 
 ```js

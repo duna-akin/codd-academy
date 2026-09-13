@@ -4,7 +4,286 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Relational Algebra Playground</title>
-<link rel="stylesheet" href="styles.css">
+<style>
+:root {
+  --bg: #0f1117;
+  --bg-raised: #171a23;
+  --bg-inset: #11141b;
+  --line: #262b38;
+  --line-soft: #1d2230;
+  --text: #e7eaf3;
+  --text-dim: #9aa3b8;
+  --text-faint: #6b7488;
+  --accent: #5eead4;
+  --accent-deep: #14b8a6;
+  --violet: #a78bfa;
+  --amber: #fbbf24;
+  --rose: #f472b6;
+  --blue: #60a5fa;
+  --good: #34d399;
+  --bad: #f87171;
+  --radius: 10px;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 700px at 15% -10%, #1b2130 0%, var(--bg) 55%);
+  color: var(--text);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+h1, h2 { margin: 0; font-weight: 650; }
+code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 22px; border-bottom: 1px solid var(--line);
+  background: rgba(15, 17, 23, .8); backdrop-filter: blur(8px);
+  position: sticky; top: 0; z-index: 20;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-mark {
+  width: 42px; height: 42px; display: grid; place-items: center;
+  border-radius: 12px; font-size: 24px; font-family: var(--mono);
+  background: linear-gradient(145deg, var(--accent-deep), #0d9488); color: #07211d;
+  box-shadow: 0 4px 14px rgba(20, 184, 166, .3);
+}
+.topbar h1 { font-size: 17px; letter-spacing: .2px; }
+.tagline { margin: 1px 0 0; font-size: 12.5px; color: var(--text-dim); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.progress { font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+/* ---------- buttons ---------- */
+
+.btn {
+  border: 1px solid var(--line); background: var(--bg-raised); color: var(--text);
+  padding: 7px 13px; border-radius: 8px; font-size: 13px; font-weight: 550;
+  cursor: pointer; transition: background .12s, border-color .12s, transform .08s;
+}
+.btn:hover:not(:disabled) { background: #1e2331; border-color: #37405270; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .38; cursor: not-allowed; }
+.btn-primary {
+  background: linear-gradient(145deg, var(--accent), var(--accent-deep));
+  color: #06211c; border-color: transparent; font-weight: 700;
+}
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); background: linear-gradient(145deg, var(--accent), var(--accent-deep)); }
+
+/* ---------- level pills ---------- */
+
+.pills {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 12px 22px; border-bottom: 1px solid var(--line-soft);
+}
+.pill {
+  min-width: 32px; height: 32px; padding: 0 8px;
+  border-radius: 8px; border: 1px solid var(--line); background: var(--bg-raised);
+  color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all .12s;
+}
+.pill:hover:not(.locked) { border-color: var(--accent-deep); color: var(--text); }
+.pill.current { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.pill.solved { color: var(--good); border-color: #34d39955; }
+.pill.solved.gold { color: var(--amber); border-color: #fbbf2455; }
+.pill.locked { opacity: .4; cursor: not-allowed; }
+
+/* ---------- layout ---------- */
+
+.layout {
+  display: grid; grid-template-columns: minmax(300px, 380px) 1fr;
+  gap: 18px; padding: 18px 22px 40px; align-items: start;
+}
+.panel { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.panel-left { position: sticky; top: 128px; max-height: calc(100vh - 150px); overflow-y: auto; padding-right: 4px; }
+
+.block { background: var(--bg-raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.block-title { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim); }
+.block-title span { text-transform: none; letter-spacing: 0; color: var(--accent); }
+.block-sub { margin: 4px 0 10px; font-size: 12.5px; color: var(--text-faint); }
+
+/* ---------- palette ---------- */
+
+.palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 7px; }
+.op-chip {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 9px 4px 7px; border-radius: 9px; cursor: grab;
+  border: 1px solid var(--line); background: var(--bg-inset); color: var(--text);
+  transition: transform .1s, border-color .12s, background .12s;
+}
+.op-chip:hover { transform: translateY(-2px); border-color: var(--accent-deep); background: #182028; }
+.op-chip:active { cursor: grabbing; }
+.op-chip.armed { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(94, 234, 212, .22); }
+.op-sym { font-size: 21px; line-height: 1.1; font-family: var(--mono); }
+.op-name { font-size: 10.5px; color: var(--text-dim); letter-spacing: .2px; }
+.op-badge {
+  position: absolute; top: -7px; right: -6px; background: var(--amber); color: #3b2600;
+  font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 20px; letter-spacing: .4px;
+}
+.op-chip.is-new { border-color: #fbbf2455; }
+
+.op-project .op-sym, .node-op.op-project .node-sym { color: var(--accent); }
+.op-select .op-sym, .node-op.op-select .node-sym { color: var(--amber); }
+.op-rename .op-sym, .node-op.op-rename .node-sym { color: var(--rose); }
+.op-join .op-sym, .node-op.op-join .node-sym { color: var(--violet); }
+.op-product .op-sym, .node-op.op-product .node-sym { color: var(--violet); }
+.op-divide .op-sym, .node-op.op-divide .node-sym { color: var(--violet); }
+.op-union .op-sym, .node-op.op-union .node-sym,
+.op-intersect .op-sym, .node-op.op-intersect .node-sym,
+.op-difference .op-sym, .node-op.op-difference .node-sym { color: var(--blue); }
+
+/* ---------- relation cards ---------- */
+
+.tables { display: flex; flex-direction: column; gap: 10px; }
+.table-card { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--bg-inset); }
+.table-head {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: grab;
+  background: #1b2130; border-bottom: 1px solid var(--line);
+}
+.table-head:hover { background: #212838; }
+.table-head.armed { box-shadow: 0 0 0 2px rgba(94, 234, 212, .25) inset; }
+.grip { color: var(--text-faint); font-size: 13px; }
+.rel-name { font-family: var(--mono); font-weight: 600; color: var(--accent); font-size: 13.5px; }
+.rel-meta { margin-left: auto; font-size: 11px; color: var(--text-faint); }
+.table-body { max-height: 230px; overflow: auto; }
+
+/* ---------- tables ---------- */
+
+.rel-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+.rel-table th {
+  position: sticky; top: 0; text-align: left; padding: 6px 10px; white-space: nowrap;
+  background: #161b26; color: var(--text-dim); font-weight: 600; border-bottom: 1px solid var(--line);
+}
+.rel-table td { padding: 5px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.rel-table td.num { color: var(--accent); text-align: right; font-variant-numeric: tabular-nums; }
+.rel-table tbody tr:hover td { background: #1a2030; }
+.rel-table .empty-row td { color: var(--text-faint); font-style: italic; text-align: center; padding: 12px; }
+.truncated { margin: 6px 10px; font-size: 11.5px; color: var(--text-faint); }
+
+/* ---------- question ---------- */
+
+.question-card {
+  background: linear-gradient(160deg, #1a2531, var(--bg-raised) 65%);
+  border: 1px solid #2a3a44; border-radius: var(--radius); padding: 16px 18px;
+}
+.question-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.level-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); font-weight: 700; }
+.level-title { font-size: 17px; }
+.question { margin: 8px 0 0; font-size: 15.5px; }
+.tip {
+  margin: 10px 0 0; padding: 9px 12px; border-left: 3px solid var(--accent-deep);
+  background: #12202080; border-radius: 0 7px 7px 0; font-size: 13px; color: var(--text-dim);
+}
+.tip b { color: var(--text); font-family: var(--mono); }
+
+/* ---------- canvas ---------- */
+
+.toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+.canvas {
+  min-height: 190px; padding: 20px; border-radius: 9px;
+  background:
+    radial-gradient(circle at 1px 1px, #2a3142 1px, transparent 0) 0 0 / 18px 18px,
+    var(--bg-inset);
+  border: 1px solid var(--line);
+  display: flex; justify-content: center; align-items: flex-start; overflow: auto;
+}
+
+.node { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; }
+.node-head {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+  border-radius: 9px; border: 1px solid var(--line); background: var(--bg-raised);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .28);
+}
+.node-op > .node-head { border-color: #34405a; }
+.node-rel > .node-head { border-color: var(--accent-deep); background: #10231f; }
+.node-sym { font-family: var(--mono); font-size: 19px; line-height: 1; padding: 0 2px; }
+.node-rel .node-sym { font-size: 14px; font-weight: 600; color: var(--accent); }
+
+.param-input {
+  background: var(--bg-inset); border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 4px 8px; font-family: var(--mono); font-size: 12.5px;
+  min-width: 160px; width: 22ch; outline: none;
+}
+.param-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(94, 234, 212, .16); }
+.param-input::placeholder { color: #55607a; }
+
+.node-del {
+  border: none; background: transparent; color: var(--text-faint);
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 4px; border-radius: 5px;
+}
+.node-del:hover { color: var(--bad); background: #2a1a1e; }
+
+.node-kids { display: flex; gap: 18px; align-items: flex-start; position: relative; padding-top: 14px; }
+.node-kids::before {
+  content: ''; position: absolute; top: 0; left: 50%; width: 1px; height: 14px; background: var(--line);
+}
+.node-kids.arity-2 > * { position: relative; }
+.node-kids.arity-2::after {
+  content: ''; position: absolute; top: 13px; left: 25%; right: 25%; height: 1px; background: var(--line);
+}
+
+.slot {
+  min-width: 170px; padding: 13px 14px; border-radius: 9px; text-align: center;
+  border: 1.5px dashed #3a4256; color: var(--text-faint); font-size: 12.5px;
+  background: #141926; transition: all .12s;
+}
+.canvas.is-armed .slot, body.dragging .slot {
+  border-color: var(--accent-deep); color: var(--accent); background: #12201e; cursor: pointer;
+}
+.slot.drop-hover, .node.drop-hover > .node-head {
+  border-color: var(--accent) !important; background: #16302b !important;
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, .25);
+}
+
+/* ---------- formula ---------- */
+
+.formula-bar { display: flex; align-items: baseline; gap: 12px; margin-top: 12px; padding: 10px 12px;
+  background: var(--bg-inset); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+.formula-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .9px; color: var(--text-faint); flex-shrink: 0; }
+.formula { font-family: var(--mono); font-size: 15px; white-space: nowrap; }
+.f-op { color: var(--accent); font-size: 17px; }
+.f-sub { color: var(--amber); font-size: 11.5px; }
+.f-rel { color: var(--text); font-weight: 600; }
+.f-paren { color: var(--text-faint); }
+.f-slot { color: var(--text-faint); border-bottom: 1px dashed var(--text-faint); }
+
+/* ---------- feedback ---------- */
+
+.feedback { margin-top: 10px; font-size: 13.5px; padding: 0; }
+.feedback:not(:empty) { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); }
+.feedback-good { background: #0f2a22; border-color: #34d39955 !important; color: #bbf7d0; }
+.feedback-bad { background: #2a1418; border-color: #f8717155 !important; color: #fecaca; }
+.feedback-info { background: #16202e; border-color: #60a5fa44 !important; color: #cfe3ff; }
+
+/* ---------- output ---------- */
+
+.output-meta { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.output { border: 1px solid var(--line); border-radius: 8px; overflow: auto; max-height: 420px; background: var(--bg-inset); }
+.output-muted, .output-error { border-style: dashed; }
+.output-error { border-color: #f8717150; }
+.placeholder, .error-msg { margin: 0; padding: 16px; font-size: 13px; color: var(--text-faint); text-align: center; }
+.error-msg { color: #fca5a5; font-family: var(--mono); font-size: 12.5px; text-align: left; }
+
+/* ---------- footer + confetti ---------- */
+
+.footer { padding: 0 22px 30px; color: var(--text-faint); font-size: 12.5px; max-width: 1000px; }
+.footer b { color: var(--text-dim); }
+
+.confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
+
+@media (max-width: 1000px) {
+  .layout { grid-template-columns: 1fr; }
+  .panel-left { position: static; max-height: none; order: 2; }
+  .panel-main { order: 1; }
+}
+
+</style>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='56'>π</text></svg>">
 </head>
 <body>
@@ -89,8 +368,1490 @@
   </p>
 </footer>
 
-<script src="js/engine.js"></script>
-<script src="js/levels.js"></script>
-<script src="js/app.js"></script>
+<script>
+/* ===== src/engine.js ===== */
+/* Relational Algebra engine: set-semantics relations + the classic operators. */
+(function (global) {
+  'use strict';
+
+  function RAError(message) {
+    var e = new Error(message);
+    e.name = 'RAError';
+    e.isRAError = true;
+    return e;
+  }
+
+  /* ---------- relations ---------- */
+
+  function rowKey(row, attrs) {
+    return JSON.stringify(attrs.map(function (a) { return [typeof row[a], row[a]]; }));
+  }
+
+  function dedupe(attrs, rows) {
+    var seen = Object.create(null), out = [];
+    rows.forEach(function (r) {
+      var k = rowKey(r, attrs);
+      if (!(k in seen)) { seen[k] = true; out.push(r); }
+    });
+    return out;
+  }
+
+  // rows may be given as arrays (positional) or objects (keyed by attribute).
+  function relation(name, attrs, rows) {
+    var normalized = (rows || []).map(function (r) {
+      if (Array.isArray(r)) {
+        if (r.length !== attrs.length) {
+          throw RAError('Row ' + JSON.stringify(r) + ' does not match schema of ' + name);
+        }
+        var o = {};
+        attrs.forEach(function (a, i) { o[a] = r[i]; });
+        return o;
+      }
+      var copy = {};
+      attrs.forEach(function (a) { copy[a] = r[a]; });
+      return copy;
+    });
+    return { name: name, attrs: attrs.slice(), rows: dedupe(attrs, normalized) };
+  }
+
+  function sameAttrSet(a, b) {
+    if (a.length !== b.length) return false;
+    var sa = a.slice().sort(), sb = b.slice().sort();
+    return sa.every(function (x, i) { return x === sb[i]; });
+  }
+
+  /* Resolve a user-written attribute name against a schema.
+     "name" matches "name" or a uniquely-qualified "E1.name". */
+  function resolveAttr(attrs, ident) {
+    if (attrs.indexOf(ident) !== -1) return ident;
+    var suffix = '.' + ident;
+    var hits = attrs.filter(function (a) { return a.slice(-suffix.length) === suffix; });
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) {
+      throw RAError('"' + ident + '" is ambiguous — it could mean ' + hits.join(' or ') + '.');
+    }
+    var lower = attrs.filter(function (a) {
+      return a.toLowerCase() === ident.toLowerCase() ||
+             a.toLowerCase().slice(-suffix.length) === suffix.toLowerCase();
+    });
+    if (lower.length === 1) return lower[0];
+    throw RAError('There is no attribute "' + ident + '". Available: ' + attrs.join(', ') + '.');
+  }
+
+  /* ---------- condition language ---------- */
+
+  var CMP = ['>=', '<=', '<>', '!=', '==', '=', '>', '<'];
+
+  function tokenize(src) {
+    var tokens = [], i = 0;
+    while (i < src.length) {
+      var c = src[i];
+      if (/\s/.test(c)) { i++; continue; }
+      if (c === '(' || c === ')') { tokens.push({ t: c }); i++; continue; }
+      if (c === "'" || c === '"') {
+        var quote = c, val = '';
+        i++;
+        while (i < src.length && src[i] !== quote) { val += src[i++]; }
+        if (i >= src.length) throw RAError('Unclosed quote in condition — did you forget a closing ' + quote + ' ?');
+        i++;
+        tokens.push({ t: 'lit', v: val });
+        continue;
+      }
+      if (/[0-9]/.test(c) || (c === '-' && /[0-9]/.test(src[i + 1] || '') && lastIsOperand(tokens) === false)) {
+        var num = '';
+        if (c === '-') { num = '-'; i++; }
+        while (i < src.length && /[0-9.]/.test(src[i])) { num += src[i++]; }
+        tokens.push({ t: 'lit', v: parseFloat(num) });
+        continue;
+      }
+      var cmp = matchCmp(src, i);
+      if (cmp) { tokens.push({ t: 'cmp', v: cmp === '==' ? '=' : cmp }); i += cmp.length; continue; }
+      if (c === '∧' || c === '&') { tokens.push({ t: 'and' }); i += (src[i + 1] === '&' ? 2 : 1); continue; }
+      if (c === '∨' || c === '|') { tokens.push({ t: 'or' }); i += (src[i + 1] === '|' ? 2 : 1); continue; }
+      if (c === '¬' || c === '!') { tokens.push({ t: 'not' }); i++; continue; }
+      if (/[A-Za-z_]/.test(c)) {
+        var id = '';
+        while (i < src.length && /[A-Za-z0-9_.]/.test(src[i])) { id += src[i++]; }
+        var up = id.toUpperCase();
+        if (up === 'AND') tokens.push({ t: 'and' });
+        else if (up === 'OR') tokens.push({ t: 'or' });
+        else if (up === 'NOT') tokens.push({ t: 'not' });
+        else if (up === 'TRUE' || up === 'FALSE') tokens.push({ t: 'lit', v: up === 'TRUE' });
+        else tokens.push({ t: 'id', v: id });
+        continue;
+      }
+      throw RAError('I do not understand "' + c + '" in the condition.');
+    }
+    return tokens;
+  }
+
+  function lastIsOperand(tokens) {
+    var last = tokens[tokens.length - 1];
+    return !!last && (last.t === 'id' || last.t === 'lit' || last.t === ')');
+  }
+
+  function matchCmp(src, i) {
+    for (var k = 0; k < CMP.length; k++) {
+      if (src.substr(i, CMP[k].length) === CMP[k]) return CMP[k];
+    }
+    return null;
+  }
+
+  function parseCondition(src) {
+    var tokens = tokenize(src), pos = 0;
+
+    function peek() { return tokens[pos]; }
+    function eat(t) {
+      if (!peek() || peek().t !== t) throw RAError('Condition is incomplete near position ' + pos + '.');
+      return tokens[pos++];
+    }
+
+    function parseOr() {
+      var node = parseAnd();
+      while (peek() && peek().t === 'or') { pos++; node = { k: 'or', l: node, r: parseAnd() }; }
+      return node;
+    }
+    function parseAnd() {
+      var node = parseNot();
+      while (peek() && peek().t === 'and') { pos++; node = { k: 'and', l: node, r: parseNot() }; }
+      return node;
+    }
+    function parseNot() {
+      if (peek() && peek().t === 'not') { pos++; return { k: 'not', l: parseNot() }; }
+      return parsePrimary();
+    }
+    function parsePrimary() {
+      if (peek() && peek().t === '(') {
+        pos++;
+        var inner = parseOr();
+        eat(')');
+        return inner;
+      }
+      var left = parseOperand();
+      if (!peek() || peek().t !== 'cmp') {
+        throw RAError('Expected a comparison such as =, <, > after "' + describe(left) + '".');
+      }
+      var op = tokens[pos++].v;
+      var right = parseOperand();
+      return { k: 'cmp', op: op, l: left, r: right };
+    }
+    function parseOperand() {
+      var tk = peek();
+      if (!tk) throw RAError('The condition ends unexpectedly.');
+      if (tk.t === 'id') { pos++; return { k: 'attr', name: tk.v }; }
+      if (tk.t === 'lit') { pos++; return { k: 'lit', value: tk.v }; }
+      throw RAError('Expected an attribute or a value in the condition.');
+    }
+    function describe(n) { return n.k === 'attr' ? n.name : String(n.value); }
+
+    if (!tokens.length) throw RAError('The condition is empty.');
+    var tree = parseOr();
+    if (pos < tokens.length) throw RAError('Unexpected extra text at the end of the condition.');
+    return tree;
+  }
+
+  function coerce(a, b) {
+    if (typeof a === 'number' && typeof b === 'string' && b.trim() !== '' && !isNaN(Number(b))) return [a, Number(b)];
+    if (typeof b === 'number' && typeof a === 'string' && a.trim() !== '' && !isNaN(Number(a))) return [Number(a), b];
+    return [a, b];
+  }
+
+  function evalCondition(node, row, attrs) {
+    switch (node.k) {
+      case 'and': return evalCondition(node.l, row, attrs) && evalCondition(node.r, row, attrs);
+      case 'or': return evalCondition(node.l, row, attrs) || evalCondition(node.r, row, attrs);
+      case 'not': return !evalCondition(node.l, row, attrs);
+      case 'cmp': {
+        var pair = coerce(operandValue(node.l, row, attrs), operandValue(node.r, row, attrs));
+        var a = pair[0], b = pair[1];
+        switch (node.op) {
+          case '=': return a === b;
+          case '<>': case '!=': return a !== b;
+          case '<': return a < b;
+          case '<=': return a <= b;
+          case '>': return a > b;
+          case '>=': return a >= b;
+        }
+        throw RAError('Unknown comparison "' + node.op + '".');
+      }
+      case 'lit': return !!node.value;
+      default: throw RAError('Malformed condition.');
+    }
+  }
+
+  function operandValue(node, row, attrs) {
+    if (node.k === 'lit') return node.value;
+    try {
+      return row[resolveAttr(attrs, node.name)];
+    } catch (e) {
+      if (e.isRAError && /no attribute/.test(e.message)) {
+        throw RAError(e.message + ' If you meant the text value, quote it: \'' + node.name + '\'.');
+      }
+      throw e;
+    }
+  }
+
+  /* ---------- operators ---------- */
+
+  function splitList(text) {
+    return String(text || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+
+  function project(r, param) {
+    var wanted = splitList(param);
+    if (!wanted.length) throw RAError('π needs a list of attributes, e.g. ' + r.attrs.slice(0, 2).join(', ') + '.');
+    var attrs = wanted.map(function (w) { return resolveAttr(r.attrs, w); });
+    attrs.forEach(function (a, i) {
+      if (attrs.indexOf(a) !== i) throw RAError('π lists "' + a + '" twice.');
+    });
+    return relation('π(' + r.name + ')', attrs, r.rows.map(function (row) {
+      var o = {};
+      attrs.forEach(function (a) { o[a] = row[a]; });
+      return o;
+    }));
+  }
+
+  function select(r, param) {
+    if (!String(param || '').trim()) throw RAError('σ needs a condition, e.g. salary > 60000.');
+    var cond = parseCondition(param);
+    return relation('σ(' + r.name + ')', r.attrs, r.rows.filter(function (row) {
+      return evalCondition(cond, row, r.attrs);
+    }));
+  }
+
+  function rename(r, param) {
+    var spec = String(param || '').trim();
+    if (!spec) throw RAError('ρ needs a new name, e.g. E  or  E(a, b, c).');
+    var m = /^([A-Za-z_][A-Za-z0-9_]*)?\s*(?:\(([^)]*)\))?$/.exec(spec);
+    if (!m || (!m[1] && !m[2])) throw RAError('ρ expects  NewName  or  NewName(a, b, c)  or  (a, b, c).');
+    var newName = m[1] || r.name;
+    var attrs = r.attrs.slice();
+
+    if (m[2] !== undefined) {
+      var list = splitList(m[2]);
+      if (list.length !== r.attrs.length) {
+        throw RAError('ρ renames ' + list.length + ' attribute(s) but the relation has ' + r.attrs.length + '.');
+      }
+      attrs = list;
+    } else if (m[1]) {
+      // Re-qualify attributes that were tagged with the old relation name.
+      attrs = attrs.map(function (a) {
+        return a.indexOf(r.name + '.') === 0 ? newName + '.' + a.slice(r.name.length + 1) : a;
+      });
+    }
+    var rows = r.rows.map(function (row) {
+      var o = {};
+      r.attrs.forEach(function (a, i) { o[attrs[i]] = row[a]; });
+      return o;
+    });
+    return relation(newName, attrs, rows);
+  }
+
+  function setOp(kind, r, s) {
+    if (r.attrs.length !== s.attrs.length) {
+      throw RAError(symbolOf(kind) + ' needs both sides to have the same number of attributes (' +
+        r.attrs.length + ' vs ' + s.attrs.length + ').');
+    }
+    var byName = sameAttrSet(r.attrs, s.attrs);
+    var mapped = s.rows.map(function (row) {
+      var o = {};
+      r.attrs.forEach(function (a, i) { o[a] = byName ? row[a] : row[s.attrs[i]]; });
+      return o;
+    });
+    var inR = {}, inS = {};
+    r.rows.forEach(function (row) { inR[rowKey(row, r.attrs)] = true; });
+    mapped.forEach(function (row) { inS[rowKey(row, r.attrs)] = true; });
+
+    var rows;
+    if (kind === 'union') rows = r.rows.concat(mapped);
+    else if (kind === 'intersect') rows = r.rows.filter(function (row) { return inS[rowKey(row, r.attrs)]; });
+    else rows = r.rows.filter(function (row) { return !inS[rowKey(row, r.attrs)]; });
+
+    return relation('(' + r.name + ' ' + symbolOf(kind) + ' ' + s.name + ')', r.attrs, rows);
+  }
+
+  function qualify(r, other) {
+    var clash = r.attrs.filter(function (a) { return other.attrs.indexOf(a) !== -1; });
+    if (!clash.length) return r;
+    var attrs = r.attrs.map(function (a) { return clash.indexOf(a) !== -1 ? r.name + '.' + a : a; });
+    var rows = r.rows.map(function (row) {
+      var o = {};
+      r.attrs.forEach(function (a, i) { o[attrs[i]] = row[a]; });
+      return o;
+    });
+    return { name: r.name, attrs: attrs, rows: rows };
+  }
+
+  function product(r, s) {
+    if (r.name === s.name) {
+      throw RAError('Both sides of × are called "' + r.name + '". Rename one with ρ first.');
+    }
+    var lr = qualify(r, s), rs = qualify(s, r);
+    var attrs = lr.attrs.concat(rs.attrs);
+    var dup = attrs.filter(function (a, i) { return attrs.indexOf(a) !== i; });
+    if (dup.length) throw RAError('× would produce two columns named "' + dup[0] + '". Use ρ to rename.');
+    var rows = [];
+    lr.rows.forEach(function (a) {
+      rs.rows.forEach(function (b) {
+        var o = {};
+        lr.attrs.forEach(function (k) { o[k] = a[k]; });
+        rs.attrs.forEach(function (k) { o[k] = b[k]; });
+        rows.push(o);
+      });
+    });
+    return relation('(' + r.name + ' × ' + s.name + ')', attrs, rows);
+  }
+
+  function naturalJoin(r, s) {
+    var common = r.attrs.filter(function (a) { return s.attrs.indexOf(a) !== -1; });
+    if (!common.length) return product(r, s);
+    var extra = s.attrs.filter(function (a) { return common.indexOf(a) === -1; });
+    var attrs = r.attrs.concat(extra);
+    var rows = [];
+    r.rows.forEach(function (a) {
+      s.rows.forEach(function (b) {
+        var match = common.every(function (c) {
+          var pair = coerce(a[c], b[c]);
+          return pair[0] === pair[1];
+        });
+        if (!match) return;
+        var o = {};
+        r.attrs.forEach(function (k) { o[k] = a[k]; });
+        extra.forEach(function (k) { o[k] = b[k]; });
+        rows.push(o);
+      });
+    });
+    return relation('(' + r.name + ' ⋈ ' + s.name + ')', attrs, rows);
+  }
+
+  function join(r, s, param) {
+    if (!String(param || '').trim()) return naturalJoin(r, s);
+    return select(product(r, s), param);
+  }
+
+  function divide(r, s) {
+    var missing = s.attrs.filter(function (a) { return r.attrs.indexOf(a) === -1; });
+    if (missing.length) {
+      throw RAError('÷ needs the right side’s attributes to appear on the left. Missing: ' + missing.join(', ') + '.');
+    }
+    var quotient = r.attrs.filter(function (a) { return s.attrs.indexOf(a) === -1; });
+    if (!quotient.length) throw RAError('÷ leaves no attributes on the left side.');
+    var present = Object.create(null);
+    r.rows.forEach(function (row) { present[rowKey(row, r.attrs)] = true; });
+
+    var candidates = dedupe(quotient, r.rows.map(function (row) {
+      var o = {};
+      quotient.forEach(function (a) { o[a] = row[a]; });
+      return o;
+    }));
+    var rows = candidates.filter(function (cand) {
+      return s.rows.every(function (sRow) {
+        var probe = {};
+        quotient.forEach(function (a) { probe[a] = cand[a]; });
+        s.attrs.forEach(function (a) { probe[a] = sRow[a]; });
+        return present[rowKey(probe, r.attrs)];
+      });
+    });
+    return relation('(' + r.name + ' ÷ ' + s.name + ')', quotient, rows);
+  }
+
+  /* ---------- operator metadata ---------- */
+
+  var OPS = {
+    project:    { symbol: 'π', name: 'Project',    arity: 1, param: 'required', paramLabel: 'attributes',
+                  hint: 'Keep only these columns (duplicates disappear).', placeholder: 'ename, salary' },
+    select:     { symbol: 'σ', name: 'Select',     arity: 1, param: 'required', paramLabel: 'condition',
+                  hint: 'Keep only rows matching the condition.', placeholder: "salary > 60000 AND dept = 'Sales'" },
+    rename:     { symbol: 'ρ', name: 'Rename',     arity: 1, param: 'required', paramLabel: 'new name',
+                  hint: 'Rename the relation, and optionally its attributes.', placeholder: 'E1  or  E1(a, b)' },
+    union:      { symbol: '∪', name: 'Union',      arity: 2, param: 'none',
+                  hint: 'Rows in either relation.' },
+    intersect:  { symbol: '∩', name: 'Intersect',  arity: 2, param: 'none',
+                  hint: 'Rows in both relations.' },
+    difference: { symbol: '−', name: 'Difference', arity: 2, param: 'none',
+                  hint: 'Rows in the left relation but not the right.' },
+    product:    { symbol: '×', name: 'Product',    arity: 2, param: 'none',
+                  hint: 'Every pairing of left and right rows.' },
+    join:       { symbol: '⋈', name: 'Join',       arity: 2, param: 'optional', paramLabel: 'condition',
+                  hint: 'Natural join on shared attributes; add a condition for a theta join.',
+                  placeholder: 'leave empty for natural join' },
+    divide:     { symbol: '÷', name: 'Divide',     arity: 2, param: 'none',
+                  hint: 'Left rows matching every row of the right relation.' }
+  };
+
+  function symbolOf(op) { return OPS[op] ? OPS[op].symbol : op; }
+
+  /* ---------- expression trees ---------- */
+
+  function evaluate(node, db) {
+    if (!node) throw RAError('incomplete');
+    if (node.type === 'rel') {
+      var r = db[node.name];
+      if (!r) throw RAError('There is no relation called "' + node.name + '".');
+      return relation(r.name, r.attrs, r.rows);
+    }
+    var meta = OPS[node.op];
+    if (!meta) throw RAError('Unknown operator "' + node.op + '".');
+    var kids = (node.children || []).slice(0, meta.arity).map(function (c) { return evaluate(c, db); });
+    if (kids.length < meta.arity) throw RAError('incomplete');
+
+    switch (node.op) {
+      case 'project': return project(kids[0], node.param);
+      case 'select': return select(kids[0], node.param);
+      case 'rename': return rename(kids[0], node.param);
+      case 'union': return setOp('union', kids[0], kids[1]);
+      case 'intersect': return setOp('intersect', kids[0], kids[1]);
+      case 'difference': return setOp('difference', kids[0], kids[1]);
+      case 'product': return product(kids[0], kids[1]);
+      case 'join': return join(kids[0], kids[1], node.param);
+      case 'divide': return divide(kids[0], kids[1]);
+    }
+    throw RAError('Unknown operator "' + node.op + '".');
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Renders an expression tree as HTML (with <sub> for operator parameters).
+  function toHTML(node) {
+    if (!node) return '<span class="f-slot">?</span>';
+    if (node.type === 'rel') return '<span class="f-rel">' + esc(node.name) + '</span>';
+    var meta = OPS[node.op], kids = node.children || [];
+    var sym = '<span class="f-op">' + meta.symbol + '</span>';
+    if (meta.arity === 1) {
+      var sub = String(node.param || '').trim();
+      return sym + (sub ? '<sub class="f-sub">' + esc(sub) + '</sub>' : '') +
+        '<span class="f-paren">(</span>' + toHTML(kids[0]) + '<span class="f-paren">)</span>';
+    }
+    var subB = String(node.param || '').trim();
+    return '<span class="f-paren">(</span>' + toHTML(kids[0]) + ' ' + sym +
+      (subB ? '<sub class="f-sub">' + esc(subB) + '</sub>' : '') + ' ' +
+      toHTML(kids[1]) + '<span class="f-paren">)</span>';
+  }
+
+  /* ---------- answer checking ---------- */
+
+  function permutations(n) {
+    if (n === 0) return [[]];
+    var out = [];
+    permutations(n - 1).forEach(function (p) {
+      for (var i = 0; i <= p.length; i++) {
+        out.push(p.slice(0, i).concat([n - 1], p.slice(i)));
+      }
+    });
+    return out;
+  }
+
+  function rowSet(rel, order) {
+    var set = Object.create(null);
+    rel.rows.forEach(function (row) {
+      set[JSON.stringify(order.map(function (i) {
+        var v = row[rel.attrs[i]];
+        return typeof v === 'number' ? 'n:' + v : 's:' + v;
+      }))] = true;
+    });
+    return set;
+  }
+
+  function sameKeys(a, b) {
+    var ka = Object.keys(a), kb = Object.keys(b);
+    return ka.length === kb.length && ka.every(function (k) { return k in b; });
+  }
+
+  /* Relations are unordered sets of attributes, so any column permutation that
+     reproduces the expected rows counts as correct — unless the level asks for
+     exact attribute names (rename puzzles). */
+  function compare(actual, expected, options) {
+    options = options || {};
+    if (actual.attrs.length !== expected.attrs.length) {
+      return { ok: false, reason: 'arity',
+        message: 'Your result has ' + actual.attrs.length + ' column(s); the answer needs ' + expected.attrs.length + '.' };
+    }
+    if (options.checkNames) {
+      if (!sameAttrSet(actual.attrs, expected.attrs)) {
+        return { ok: false, reason: 'names',
+          message: 'The columns should be named ' + expected.attrs.join(', ') + ' — yours are ' + actual.attrs.join(', ') + '.' };
+      }
+      var order = expected.attrs.map(function (a) { return actual.attrs.indexOf(a); });
+      var identity = expected.attrs.map(function (_, i) { return i; });
+      if (sameKeys(rowSet(actual, order), rowSet(expected, identity))) return { ok: true };
+      return { ok: false, reason: 'rows', message: rowMessage(actual, expected) };
+    }
+    var target = rowSet(expected, expected.attrs.map(function (_, i) { return i; }));
+    var perms = permutations(Math.min(actual.attrs.length, 6));
+    if (actual.attrs.length <= 6) {
+      for (var i = 0; i < perms.length; i++) {
+        if (sameKeys(rowSet(actual, perms[i]), target)) return { ok: true };
+      }
+    } else if (sameKeys(rowSet(actual, actual.attrs.map(function (_, k) { return k; })), target)) {
+      return { ok: true };
+    }
+    return { ok: false, reason: 'rows', message: rowMessage(actual, expected) };
+  }
+
+  function rowMessage(actual, expected) {
+    if (actual.rows.length !== expected.rows.length) {
+      return 'Your result has ' + actual.rows.length + ' row(s); the answer has ' + expected.rows.length + '.';
+    }
+    return 'You have the right number of rows, but not the right ones.';
+  }
+
+  global.RA = {
+    relation: relation,
+    evaluate: evaluate,
+    compare: compare,
+    toHTML: toHTML,
+    OPS: OPS,
+    parseCondition: parseCondition,
+    error: RAError
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== src/levels.js ===== */
+/* Databases and puzzles. Each solution is an expression tree, so the game can
+   both compute the expected answer and drop the solution onto the canvas. */
+(function (global) {
+  'use strict';
+
+  var R = global.RA.relation;
+
+  function rel(name) { return { type: 'rel', name: name }; }
+  function op(name, param, children) {
+    return { type: 'op', op: name, param: param || '', children: children };
+  }
+
+  var DATABASES = {
+    company: {
+      label: 'Acme Corp',
+      blurb: 'Employees, the departments they sit in, and the projects they bill hours to.',
+      relations: [
+        R('Employee', ['eid', 'ename', 'dept', 'salary', 'age'], [
+          ['E1', 'Ada',  'Engineering', 95000, 34],
+          ['E2', 'Bran', 'Sales',       52000, 28],
+          ['E3', 'Cleo', 'Engineering', 72000, 45],
+          ['E4', 'Dara', 'Marketing',   61000, 31],
+          ['E5', 'Evan', 'Sales',       78000, 52],
+          ['E6', 'Fay',  'Engineering', 58000, 26],
+          ['E7', 'Gus',  'Marketing',   49000, 41]
+        ]),
+        R('Department', ['dept', 'head', 'floor'], [
+          ['Engineering', 'E1', 3],
+          ['Sales',       'E5', 2],
+          ['Marketing',   'E4', 2],
+          ['Research',    'E3', 4]
+        ]),
+        R('Project', ['pid', 'pname', 'budget'], [
+          ['P1', 'Atlas',  120000],
+          ['P2', 'Beacon',  45000],
+          ['P3', 'Comet',  250000]
+        ]),
+        R('WorksOn', ['eid', 'pid', 'hours'], [
+          ['E1', 'P1', 12],
+          ['E1', 'P2',  8],
+          ['E1', 'P3',  5],
+          ['E3', 'P1', 20],
+          ['E3', 'P3', 10],
+          ['E4', 'P2', 15],
+          ['E5', 'P1',  6],
+          ['E5', 'P2',  9],
+          ['E5', 'P3',  3],
+          ['E6', 'P2',  4]
+        ])
+      ]
+    },
+
+    school: {
+      label: 'Northfield University',
+      blurb: 'Students, the courses on offer, and who is enrolled in what.',
+      relations: [
+        R('Student', ['sid', 'sname', 'major', 'year'], [
+          ['S1', 'Nia',   'CS',      2],
+          ['S2', 'Omar',  'Math',    1],
+          ['S3', 'Pia',   'CS',      3],
+          ['S4', 'Quinn', 'Physics', 2],
+          ['S5', 'Rey',   'CS',      1]
+        ]),
+        R('Course', ['cid', 'title', 'cdept', 'credits'], [
+          ['C1', 'Databases',  'CS',      4],
+          ['C2', 'Algorithms', 'CS',      3],
+          ['C3', 'Calculus',   'Math',    4],
+          ['C4', 'Optics',     'Physics', 3]
+        ]),
+        R('Enrolled', ['sid', 'cid', 'grade'], [
+          ['S1', 'C1', 'A'],
+          ['S1', 'C2', 'B'],
+          ['S1', 'C3', 'A'],
+          ['S2', 'C3', 'B'],
+          ['S3', 'C1', 'B'],
+          ['S3', 'C2', 'A'],
+          ['S4', 'C4', 'C'],
+          ['S4', 'C1', 'A'],
+          ['S5', 'C2', 'C']
+        ])
+      ]
+    }
+  };
+
+  var LEVELS = [
+    {
+      db: 'company',
+      title: 'The whole table',
+      question: 'Return every employee, with all of their details.',
+      focus: [],
+      tip: 'A bare relation is already a valid query. Drag <b>Employee</b> onto the canvas.',
+      hints: [
+        'You do not need an operator at all for this one.',
+        'Relations live in the left panel — drag the Employee chip into the empty slot.'
+      ],
+      solution: rel('Employee')
+    },
+    {
+      db: 'company',
+      title: 'Just the names',
+      question: 'Return only the names of all employees.',
+      focus: ['project'],
+      tip: '<b>π</b> (project) keeps the columns you list and throws the rest away.',
+      hints: [
+        'Wrap Employee in a π.',
+        'The attribute you want is called ename.',
+        'π<sub>ename</sub>(Employee)'
+      ],
+      solution: op('project', 'ename', [rel('Employee')])
+    },
+    {
+      db: 'company',
+      title: 'Filtering rows',
+      question: 'Return the full records of every employee in the Engineering department.',
+      focus: ['select'],
+      tip: "<b>σ</b> (select) keeps rows matching a condition. Text values need quotes: dept = 'Sales'.",
+      hints: [
+        'σ goes around Employee, and the condition compares dept to a quoted string.',
+        "σ<sub>dept = 'Engineering'</sub>(Employee)"
+      ],
+      solution: op('select', "dept = 'Engineering'", [rel('Employee')])
+    },
+    {
+      db: 'company',
+      title: 'Filter, then project',
+      question: 'Return the names of employees who earn more than 60000.',
+      focus: [],
+      tip: 'Operators nest: filter first, then project the result.',
+      hints: [
+        'You need both σ and π. Filter the rows before you drop the salary column.',
+        'Drop π on the canvas first, then σ inside it, then Employee inside that.',
+        'π<sub>ename</sub>(σ<sub>salary &gt; 60000</sub>(Employee))'
+      ],
+      solution: op('project', 'ename', [op('select', 'salary > 60000', [rel('Employee')])])
+    },
+    {
+      db: 'company',
+      title: 'Two conditions',
+      question: 'Return the name and salary of every Engineering employee under 40.',
+      focus: [],
+      tip: 'Conditions combine with AND, OR and NOT — and with parentheses when you need them.',
+      hints: [
+        'One σ can hold both tests joined by AND.',
+        "π<sub>ename, salary</sub>(σ<sub>dept = 'Engineering' AND age &lt; 40</sub>(Employee))"
+      ],
+      solution: op('project', 'ename, salary', [
+        op('select', "dept = 'Engineering' AND age < 40", [rel('Employee')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Either one',
+      question: 'Return the ids of employees who work in Sales or in Marketing.',
+      focus: [],
+      tip: 'OR inside a single σ is usually simpler than a union of two queries.',
+      hints: [
+        "A single σ with OR does it: dept = 'Sales' OR dept = 'Marketing'.",
+        "π<sub>eid</sub>(σ<sub>dept = 'Sales' OR dept = 'Marketing'</sub>(Employee))"
+      ],
+      solution: op('project', 'eid', [
+        op('select', "dept = 'Sales' OR dept = 'Marketing'", [rel('Employee')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Renaming things',
+      question: 'Build a relation called <b>Roster</b> whose two columns are named <b>id</b> and <b>person</b>, ' +
+               'holding every employee id and name.',
+      focus: ['rename'],
+      tip: '<b>ρ</b> (rename) takes <code>NewName</code> or <code>NewName(a, b, …)</code>. This level checks column names.',
+      checkNames: true,
+      hints: [
+        'Project the two columns first, then rename the result.',
+        'ρ takes the form Roster(id, person) — the attribute list is positional.',
+        'ρ<sub>Roster(id, person)</sub>(π<sub>eid, ename</sub>(Employee))'
+      ],
+      solution: op('rename', 'Roster(id, person)', [op('project', 'eid, ename', [rel('Employee')])])
+    },
+    {
+      db: 'company',
+      title: 'Pooling two relations',
+      question: 'Return every department name that appears anywhere — whether it has employees in it, ' +
+               'a row in Department, or both.',
+      focus: ['union'],
+      tip: '<b>∪</b> needs both sides to have the same shape, so project each side down to one column first.',
+      hints: [
+        'Project dept out of Employee, project dept out of Department, then union them.',
+        'Research has no employees, so it can only come from Department.',
+        'π<sub>dept</sub>(Employee) ∪ π<sub>dept</sub>(Department)'
+      ],
+      solution: op('union', '', [
+        op('project', 'dept', [rel('Employee')]),
+        op('project', 'dept', [rel('Department')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'The ones that are missing',
+      question: 'Return the ids of employees who are not working on any project.',
+      focus: ['difference'],
+      tip: '<b>−</b> is how relational algebra says "not". Take all ids, subtract the busy ones.',
+      hints: [
+        'Every employee id, minus every id that appears in WorksOn.',
+        'Both sides must be a single eid column.',
+        'π<sub>eid</sub>(Employee) − π<sub>eid</sub>(WorksOn)'
+      ],
+      solution: op('difference', '', [
+        op('project', 'eid', [rel('Employee')]),
+        op('project', 'eid', [rel('WorksOn')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'In both lists',
+      question: 'Return the departments that are on floor 2 <i>and</i> have at least one employee older than 40.',
+      focus: ['intersect'],
+      tip: '<b>∩</b> keeps rows present on both sides. Filter each side separately, then intersect.',
+      hints: [
+        'Left: departments on floor 2. Right: departments of employees over 40.',
+        'Project both sides down to dept so they are union-compatible.',
+        'π<sub>dept</sub>(σ<sub>floor = 2</sub>(Department)) ∩ π<sub>dept</sub>(σ<sub>age &gt; 40</sub>(Employee))'
+      ],
+      solution: op('intersect', '', [
+        op('project', 'dept', [op('select', 'floor = 2', [rel('Department')])]),
+        op('project', 'dept', [op('select', 'age > 40', [rel('Employee')])])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Connecting relations',
+      question: 'Return each employee name paired with the name of every project they work on.',
+      focus: ['join'],
+      tip: '<b>⋈</b> with no condition is a natural join: it matches rows on the attributes both sides share.',
+      hints: [
+        'Employee and WorksOn share eid; WorksOn and Project share pid.',
+        'Join all three relations, then project the two name columns.',
+        'π<sub>ename, pname</sub>((Employee ⋈ WorksOn) ⋈ Project)'
+      ],
+      solution: op('project', 'ename, pname', [
+        op('join', '', [op('join', '', [rel('Employee'), rel('WorksOn')]), rel('Project')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Join and filter',
+      question: 'Return the employee name and project name for every assignment of more than 10 hours.',
+      focus: [],
+      tip: 'You can filter before or after a join — the answer is the same, the work is not.',
+      hints: [
+        'Join the three relations, then σ on hours, then project.',
+        'π<sub>ename, pname</sub>(σ<sub>hours &gt; 10</sub>((Employee ⋈ WorksOn) ⋈ Project))'
+      ],
+      solution: op('project', 'ename, pname', [
+        op('select', 'hours > 10', [
+          op('join', '', [op('join', '', [rel('Employee'), rel('WorksOn')]), rel('Project')])
+        ])
+      ])
+    },
+    {
+      db: 'school',
+      title: 'A new database',
+      question: 'Return the names of students who earned an A in at least one course.',
+      focus: [],
+      tip: 'Same operators, new tables. Student and Enrolled share sid.',
+      hints: [
+        "Filter Enrolled on grade = 'A', join to Student, project the name.",
+        "π<sub>sname</sub>(Student ⋈ σ<sub>grade = 'A'</sub>(Enrolled))"
+      ],
+      solution: op('project', 'sname', [
+        op('join', '', [rel('Student'), op('select', "grade = 'A'", [rel('Enrolled')])])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Comparing a table to itself',
+      question: 'Return every pair of distinct employee names who share a department. ' +
+               'List each pair once, not twice.',
+      focus: ['product', 'rename'],
+      tip: 'To compare a relation with itself you must ρ it into two names first, then × them. ' +
+           'Columns become A.eid, B.eid, and so on.',
+      hints: [
+        'Rename Employee to A on one side and B on the other, then take the product.',
+        'A.eid < B.eid keeps one copy of each pair and rules out pairing someone with themselves.',
+        "π<sub>A.ename, B.ename</sub>(σ<sub>A.dept = B.dept AND A.eid &lt; B.eid</sub>(ρ<sub>A</sub>(Employee) × ρ<sub>B</sub>(Employee)))"
+      ],
+      solution: op('project', 'A.ename, B.ename', [
+        op('select', 'A.dept = B.dept AND A.eid < B.eid', [
+          op('product', '', [
+            op('rename', 'A', [rel('Employee')]),
+            op('rename', 'B', [rel('Employee')])
+          ])
+        ])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'For all',
+      question: 'Return the ids of employees who work on <i>every</i> project.',
+      focus: ['divide'],
+      tip: '<b>÷</b> answers "for all" questions. R ÷ S keeps the left-over columns of R whose value ' +
+           'pairs with every row of S.',
+      hints: [
+        'The left side should be just (eid, pid) from WorksOn.',
+        'The right side is every project id.',
+        'π<sub>eid, pid</sub>(WorksOn) ÷ π<sub>pid</sub>(Project)'
+      ],
+      solution: op('divide', '', [
+        op('project', 'eid, pid', [rel('WorksOn')]),
+        op('project', 'pid', [rel('Project')])
+      ])
+    },
+    {
+      db: 'school',
+      title: 'Final exam',
+      question: 'Return the names of students who have taken every CS course.',
+      focus: [],
+      tip: 'Division finds the students; a join turns their ids into names.',
+      hints: [
+        'Right side: the cids of courses whose cdept is CS.',
+        'Divide π(sid, cid) of Enrolled by that, then join the result back to Student.',
+        "π<sub>sname</sub>(Student ⋈ (π<sub>sid, cid</sub>(Enrolled) ÷ π<sub>cid</sub>(σ<sub>cdept = 'CS'</sub>(Course))))"
+      ],
+      solution: op('project', 'sname', [
+        op('join', '', [
+          rel('Student'),
+          op('divide', '', [
+            op('project', 'sid, cid', [rel('Enrolled')]),
+            op('project', 'cid', [op('select', "cdept = 'CS'", [rel('Course')])])
+          ])
+        ])
+      ])
+    }
+  ];
+
+  global.GAME = { DATABASES: DATABASES, LEVELS: LEVELS };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== src/app.js ===== */
+/* Game UI: drag-and-drop expression tree, live evaluation, answer checking. */
+(function () {
+  'use strict';
+
+  var RA = window.RA, GAME = window.GAME;
+  var LEVELS = GAME.LEVELS, DATABASES = GAME.DATABASES, OPS = RA.OPS;
+  var STORE_KEY = 'relational-algebra-game-v1';
+  var MAX_PREVIEW_ROWS = 40;
+
+  var state = {
+    levelIndex: 0,
+    tree: null,
+    hintsShown: 0,
+    usedHelp: false,
+    solved: {},          // levelIndex -> 'gold' | 'silver'
+    armed: null          // {kind:'op'|'rel', value:string} for click-to-place
+  };
+
+  var el = {};
+
+  /* ---------- persistence ---------- */
+
+  function load() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+      if (saved && saved.solved) state.solved = saved.solved;
+      if (typeof saved.levelIndex === 'number') {
+        state.levelIndex = Math.min(Math.max(saved.levelIndex, 0), LEVELS.length - 1);
+      }
+    } catch (e) { /* fresh start */ }
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ solved: state.solved, levelIndex: state.levelIndex }));
+    } catch (e) { /* private mode: progress simply will not persist */ }
+  }
+
+  function unlockedCount() {
+    var n = 1;
+    for (var i = 0; i < LEVELS.length; i++) {
+      if (state.solved[i]) n = Math.max(n, i + 2);
+    }
+    return Math.min(n, LEVELS.length);
+  }
+
+  /* ---------- helpers ---------- */
+
+  function level() { return LEVELS[state.levelIndex]; }
+
+  function currentDB() {
+    var db = {};
+    DATABASES[level().db].relations.forEach(function (r) { db[r.name] = r; });
+    return db;
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function clone(node) {
+    if (!node) return null;
+    if (node.type === 'rel') return { type: 'rel', name: node.name };
+    return {
+      type: 'op', op: node.op, param: node.param || '',
+      children: (node.children || []).map(clone)
+    };
+  }
+
+  function newOpNode(opName) {
+    var arity = OPS[opName].arity;
+    return { type: 'op', op: opName, param: '', children: new Array(arity).fill(null) };
+  }
+
+  /* ---------- tree addressing ---------- */
+
+  function getNode(path) {
+    var node = state.tree;
+    for (var i = 0; i < path.length; i++) {
+      if (!node || !node.children) return null;
+      node = node.children[path[i]];
+    }
+    return node;
+  }
+
+  function setNode(path, value) {
+    if (!path.length) { state.tree = value; return; }
+    var parent = getNode(path.slice(0, -1));
+    if (parent && parent.children) parent.children[path[path.length - 1]] = value;
+  }
+
+  // Removing an operator promotes its first filled child, so you can peel layers off.
+  function removeAt(path) {
+    var node = getNode(path);
+    var promoted = null;
+    if (node && node.children) {
+      promoted = node.children.filter(Boolean)[0] || null;
+    }
+    setNode(path, promoted);
+  }
+
+  /* ---------- placing nodes ---------- */
+
+  function place(path, payload) {
+    var target = getNode(path);
+    var node;
+    if (payload.kind === 'rel') {
+      node = { type: 'rel', name: payload.value };
+    } else {
+      node = newOpNode(payload.value);
+      // Dropping an operator onto something that already exists wraps it.
+      if (target) node.children[0] = target;
+    }
+    setNode(path, node);
+    state.armed = null;
+    render();
+    focusFirstEmptyParam(path);
+  }
+
+  function focusFirstEmptyParam(path) {
+    var selector = '.param-input[data-path="' + JSON.stringify(path) + '"]';
+    var input = el.canvas.querySelector(selector);
+    if (input && !input.value) input.focus();
+  }
+
+  /* ---------- rendering: tables ---------- */
+
+  function tableHTML(rel, options) {
+    options = options || {};
+    var rows = rel.rows;
+    var truncated = false;
+    if (!options.all && rows.length > MAX_PREVIEW_ROWS) {
+      rows = rows.slice(0, MAX_PREVIEW_ROWS);
+      truncated = true;
+    }
+    var html = '<table class="rel-table"><thead><tr>' +
+      rel.attrs.map(function (a) { return '<th>' + esc(a) + '</th>'; }).join('') +
+      '</tr></thead><tbody>';
+    if (!rel.rows.length) {
+      html += '<tr class="empty-row"><td colspan="' + Math.max(rel.attrs.length, 1) + '">no rows</td></tr>';
+    }
+    rows.forEach(function (row) {
+      html += '<tr>' + rel.attrs.map(function (a) {
+        var v = row[a];
+        var cls = typeof v === 'number' ? ' class="num"' : '';
+        return '<td' + cls + '>' + esc(v) + '</td>';
+      }).join('') + '</tr>';
+    });
+    html += '</tbody></table>';
+    if (truncated) {
+      html += '<p class="truncated">showing ' + MAX_PREVIEW_ROWS + ' of ' + rel.rows.length + ' rows</p>';
+    }
+    return html;
+  }
+
+  function renderTables() {
+    var info = DATABASES[level().db];
+    el.dbName.textContent = info.label;
+    el.dbBlurb.textContent = info.blurb;
+    el.tables.innerHTML = info.relations.map(function (r) {
+      return '<div class="table-card">' +
+        '<div class="table-head" draggable="true" data-rel="' + esc(r.name) + '" ' +
+             'title="Drag me into the query canvas">' +
+          '<span class="grip">⠿</span><span class="rel-name">' + esc(r.name) + '</span>' +
+          '<span class="rel-meta">' + r.rows.length + ' rows</span>' +
+        '</div>' +
+        '<div class="table-body">' + tableHTML(r, { all: true }) + '</div>' +
+      '</div>';
+    }).join('');
+
+    el.tables.querySelectorAll('.table-head').forEach(function (head) {
+      head.addEventListener('dragstart', function (e) {
+        startDrag(e, { kind: 'rel', value: head.dataset.rel });
+      });
+      head.addEventListener('dragend', endDrag);
+      head.addEventListener('click', function () {
+        arm({ kind: 'rel', value: head.dataset.rel }, head);
+      });
+    });
+  }
+
+  /* ---------- rendering: palette ---------- */
+
+  function renderPalette() {
+    var focus = level().focus || [];
+    el.palette.innerHTML = Object.keys(OPS).map(function (key) {
+      var meta = OPS[key];
+      var isNew = focus.indexOf(key) !== -1;
+      return '<button class="op-chip op-' + key + (isNew ? ' is-new' : '') + '" draggable="true" ' +
+        'data-op="' + key + '" title="' + esc(meta.name + ' — ' + meta.hint) + '">' +
+        '<span class="op-sym">' + meta.symbol + '</span>' +
+        '<span class="op-name">' + esc(meta.name) + '</span>' +
+        (isNew ? '<span class="op-badge">new</span>' : '') +
+      '</button>';
+    }).join('');
+
+    el.palette.querySelectorAll('.op-chip').forEach(function (chip) {
+      chip.addEventListener('dragstart', function (e) {
+        startDrag(e, { kind: 'op', value: chip.dataset.op });
+      });
+      chip.addEventListener('dragend', endDrag);
+      chip.addEventListener('click', function () {
+        arm({ kind: 'op', value: chip.dataset.op }, chip);
+      });
+    });
+  }
+
+  /* ---------- rendering: expression tree ---------- */
+
+  function buildNode(node, path) {
+    if (!node) return buildSlot(path);
+
+    var wrap = document.createElement('div');
+    wrap.className = 'node ' + (node.type === 'rel' ? 'node-rel' : 'node-op op-' + node.op);
+    wrap.dataset.path = JSON.stringify(path);
+
+    var head = document.createElement('div');
+    head.className = 'node-head';
+
+    if (node.type === 'rel') {
+      head.innerHTML = '<span class="node-sym">' + esc(node.name) + '</span>';
+    } else {
+      var meta = OPS[node.op];
+      head.innerHTML = '<span class="node-sym" title="' + esc(meta.name) + '">' + meta.symbol + '</span>';
+      if (meta.param !== 'none') {
+        var input = document.createElement('input');
+        input.className = 'param-input';
+        input.type = 'text';
+        input.value = node.param || '';
+        input.placeholder = meta.placeholder || meta.paramLabel;
+        input.dataset.path = JSON.stringify(path);
+        input.setAttribute('aria-label', meta.name + ' ' + meta.paramLabel);
+        input.addEventListener('input', function () {
+          node.param = input.value;
+          refreshOutput();
+        });
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); check(); }
+        });
+        // Typing must not be hijacked by the node's own drag handlers.
+        input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+        head.appendChild(input);
+      }
+    }
+
+    var del = document.createElement('button');
+    del.className = 'node-del';
+    del.type = 'button';
+    del.innerHTML = '×';
+    del.title = node.type === 'rel' ? 'Remove this relation' : 'Remove this operator (its first input moves up)';
+    del.addEventListener('click', function (e) {
+      e.stopPropagation();
+      removeAt(path);
+      render();
+    });
+    head.appendChild(del);
+    wrap.appendChild(head);
+
+    if (node.type === 'op') {
+      var kids = document.createElement('div');
+      kids.className = 'node-kids arity-' + OPS[node.op].arity;
+      for (var i = 0; i < OPS[node.op].arity; i++) {
+        kids.appendChild(buildNode((node.children || [])[i], path.concat(i)));
+      }
+      wrap.appendChild(kids);
+    }
+
+    attachDropTarget(wrap, path);
+    return wrap;
+  }
+
+  function buildSlot(path) {
+    var slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.dataset.path = JSON.stringify(path);
+    slot.innerHTML = '<span>drop a relation or operator</span>';
+    attachDropTarget(slot, path);
+    return slot;
+  }
+
+  function attachDropTarget(node, path) {
+    node.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      clearDropHighlight();
+      node.classList.add('drop-hover');
+    });
+    node.addEventListener('dragleave', function () { node.classList.remove('drop-hover'); });
+    node.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      clearDropHighlight();
+      var payload = readDrag(e);
+      if (payload) place(path, payload);
+    });
+    node.addEventListener('click', function (e) {
+      if (!state.armed) return;
+      e.stopPropagation();
+      place(path, state.armed);
+    });
+  }
+
+  function clearDropHighlight() {
+    el.canvas.querySelectorAll('.drop-hover').forEach(function (n) { n.classList.remove('drop-hover'); });
+  }
+
+  function renderTree() {
+    el.canvas.innerHTML = '';
+    el.canvas.appendChild(buildNode(state.tree, []));
+    el.canvas.classList.toggle('is-armed', !!state.armed);
+  }
+
+  /* ---------- drag plumbing ---------- */
+
+  function startDrag(e, payload) {
+    e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = 'copy';
+    document.body.classList.add('dragging');
+    state.armed = null;
+    updateArmedUI();
+  }
+
+  function endDrag() {
+    document.body.classList.remove('dragging');
+    clearDropHighlight();
+  }
+
+  function readDrag(e) {
+    try { return JSON.parse(e.dataTransfer.getData('text/plain')); }
+    catch (err) { return null; }
+  }
+
+  function arm(payload, sourceEl) {
+    var same = state.armed && state.armed.kind === payload.kind && state.armed.value === payload.value;
+    state.armed = same ? null : payload;
+    updateArmedUI();
+    if (state.armed) {
+      setFeedback('info', 'Now click a slot in the canvas to place ' +
+        (payload.kind === 'rel' ? payload.value : OPS[payload.value].symbol + ' ' + OPS[payload.value].name) +
+        '. (Dragging works too.)');
+    } else {
+      clearFeedback();
+    }
+    if (sourceEl) { /* class refresh happens in updateArmedUI */ }
+  }
+
+  function updateArmedUI() {
+    document.querySelectorAll('.op-chip, .table-head').forEach(function (n) {
+      var payload = n.dataset.op ? { kind: 'op', value: n.dataset.op } : { kind: 'rel', value: n.dataset.rel };
+      var on = !!state.armed && state.armed.kind === payload.kind && state.armed.value === payload.value;
+      n.classList.toggle('armed', on);
+    });
+    el.canvas.classList.toggle('is-armed', !!state.armed);
+  }
+
+  /* ---------- evaluation ---------- */
+
+  function evaluateTree() {
+    try {
+      return { ok: true, relation: RA.evaluate(state.tree, currentDB()) };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  function refreshOutput() {
+    el.formula.innerHTML = RA.toHTML(state.tree);
+    var res = evaluateTree();
+    if (res.ok) {
+      el.outputMeta.textContent = res.relation.attrs.length + ' column' +
+        (res.relation.attrs.length === 1 ? '' : 's') + ' · ' +
+        res.relation.rows.length + ' row' + (res.relation.rows.length === 1 ? '' : 's');
+      el.output.className = 'output';
+      el.output.innerHTML = tableHTML(res.relation);
+    } else if (res.error === 'incomplete') {
+      el.outputMeta.textContent = '';
+      el.output.className = 'output output-muted';
+      el.output.innerHTML = '<p class="placeholder">Fill in the empty slots to see a result.</p>';
+    } else {
+      el.outputMeta.textContent = '';
+      el.output.className = 'output output-error';
+      el.output.innerHTML = '<p class="error-msg">' + esc(res.error) + '</p>';
+    }
+  }
+
+  /* ---------- feedback ---------- */
+
+  function setFeedback(kind, html) {
+    el.feedback.className = 'feedback feedback-' + kind;
+    el.feedback.innerHTML = html;
+  }
+
+  function clearFeedback() {
+    el.feedback.className = 'feedback';
+    el.feedback.innerHTML = '';
+  }
+
+  /* ---------- checking ---------- */
+
+  function expectedRelation() {
+    return RA.evaluate(level().solution, currentDB());
+  }
+
+  function check() {
+    var res = evaluateTree();
+    if (!res.ok) {
+      setFeedback('bad', res.error === 'incomplete'
+        ? 'Your query still has empty slots — fill them in first.'
+        : '<b>That query does not run:</b> ' + esc(res.error));
+      return;
+    }
+    var verdict = RA.compare(res.relation, expectedRelation(), { checkNames: !!level().checkNames });
+    if (verdict.ok) {
+      var grade = state.usedHelp ? 'silver' : 'gold';
+      if (state.solved[state.levelIndex] !== 'gold') state.solved[state.levelIndex] = grade;
+      save();
+      setFeedback('good', (grade === 'gold' ? '★ ' : '✓ ') + '<b>Correct!</b> ' +
+        (state.levelIndex + 1 < LEVELS.length
+          ? 'Level ' + (state.levelIndex + 2) + ' is unlocked.'
+          : 'That was the last level — you have the whole algebra.'));
+      celebrate();
+      renderPills();
+      renderNav();
+    } else {
+      setFeedback('bad', '<b>Not quite.</b> ' + esc(verdict.message));
+    }
+  }
+
+  function showHint() {
+    var hints = level().hints || [];
+    if (state.hintsShown >= hints.length) {
+      setFeedback('info', 'No hints left — try <b>Show solution</b> to see the finished query.');
+      return;
+    }
+    state.usedHelp = true;
+    var text = hints[state.hintsShown++];
+    setFeedback('info', '<b>Hint ' + state.hintsShown + '/' + hints.length + ':</b> ' + text);
+    renderNav();
+  }
+
+  function showSolution() {
+    state.usedHelp = true;
+    state.tree = clone(level().solution);
+    render();
+    setFeedback('info', 'This is one correct answer. Press <b>Check answer</b> to record it, ' +
+      'then try rebuilding it yourself.');
+  }
+
+  /* ---------- level navigation ---------- */
+
+  function goToLevel(i) {
+    if (i < 0 || i >= LEVELS.length) return;
+    if (i > unlockedCount() - 1) return;
+    state.levelIndex = i;
+    state.tree = null;
+    state.hintsShown = 0;
+    state.usedHelp = !!state.solved[i] && state.solved[i] === 'silver';
+    state.armed = null;
+    save();
+    render();
+    clearFeedback();
+  }
+
+  function renderPills() {
+    var unlocked = unlockedCount();
+    el.pills.innerHTML = LEVELS.map(function (lv, i) {
+      var cls = 'pill';
+      if (i === state.levelIndex) cls += ' current';
+      if (state.solved[i]) cls += ' solved ' + state.solved[i];
+      if (i >= unlocked) cls += ' locked';
+      var mark = state.solved[i] === 'gold' ? '★' : (state.solved[i] ? '✓' : (i >= unlocked ? '🔒' : i + 1));
+      return '<button class="' + cls + '" data-i="' + i + '" title="' + esc(lv.title) + '">' + mark + '</button>';
+    }).join('');
+    el.pills.querySelectorAll('.pill').forEach(function (p) {
+      p.addEventListener('click', function () { goToLevel(parseInt(p.dataset.i, 10)); });
+    });
+
+    var solvedCount = Object.keys(state.solved).length;
+    el.progress.textContent = solvedCount + ' / ' + LEVELS.length + ' solved';
+  }
+
+  function renderQuestion() {
+    var lv = level();
+    el.levelLabel.textContent = 'Level ' + (state.levelIndex + 1) + ' of ' + LEVELS.length;
+    el.levelTitle.textContent = lv.title;
+    el.question.innerHTML = lv.question;
+    if (lv.tip) {
+      el.tip.innerHTML = lv.tip;
+      el.tip.hidden = false;
+    } else {
+      el.tip.hidden = true;
+    }
+  }
+
+  function renderNav() {
+    el.prev.disabled = state.levelIndex === 0;
+    el.next.disabled = state.levelIndex >= unlockedCount() - 1;
+    var hints = level().hints || [];
+    el.hint.disabled = false;
+    el.hint.textContent = state.hintsShown >= hints.length ? 'No hints left' : 'Hint (' +
+      (hints.length - state.hintsShown) + ')';
+  }
+
+  function render() {
+    renderQuestion();
+    renderPills();
+    renderNav();
+    renderTables();
+    renderPalette();
+    renderTree();
+    updateArmedUI();
+    refreshOutput();
+  }
+
+  /* ---------- celebration ---------- */
+
+  function celebrate() {
+    var canvas = el.confetti;
+    var ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return;
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    var colors = ['#5eead4', '#a78bfa', '#fbbf24', '#f472b6', '#60a5fa'];
+    var bits = [];
+    for (var i = 0; i < 90; i++) {
+      bits.push({
+        x: canvas.width / 2 + (Math.random() - 0.5) * 220,
+        y: canvas.height * 0.35 + (Math.random() - 0.5) * 60,
+        vx: (Math.random() - 0.5) * 9,
+        vy: -Math.random() * 9 - 3,
+        size: 3 + Math.random() * 5,
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.3,
+        color: colors[i % colors.length]
+      });
+    }
+    canvas.hidden = false;
+    var frames = 0;
+    (function step() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      bits.forEach(function (b) {
+        b.x += b.vx; b.y += b.vy; b.vy += 0.28; b.rot += b.vr;
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(b.rot);
+        ctx.fillStyle = b.color;
+        ctx.fillRect(-b.size / 2, -b.size / 2, b.size, b.size * 0.6);
+        ctx.restore();
+      });
+      frames++;
+      if (frames < 110) requestAnimationFrame(step);
+      else { ctx.clearRect(0, 0, canvas.width, canvas.height); canvas.hidden = true; }
+    })();
+  }
+
+  /* ---------- boot ---------- */
+
+  function init() {
+    ['pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
+     'tables', 'palette', 'canvas', 'formula', 'output', 'outputMeta', 'feedback', 'confetti'
+    ].forEach(function (id) { el[id] = document.getElementById(id); });
+
+    el.prev = document.getElementById('btnPrev');
+    el.next = document.getElementById('btnNext');
+    el.hint = document.getElementById('btnHint');
+
+    document.getElementById('btnCheck').addEventListener('click', check);
+    document.getElementById('btnClear').addEventListener('click', function () {
+      state.tree = null;
+      state.armed = null;
+      render();
+      clearFeedback();
+    });
+    el.hint.addEventListener('click', showHint);
+    document.getElementById('btnSolution').addEventListener('click', showSolution);
+    el.prev.addEventListener('click', function () { goToLevel(state.levelIndex - 1); });
+    el.next.addEventListener('click', function () { goToLevel(state.levelIndex + 1); });
+    document.getElementById('btnReset').addEventListener('click', function () {
+      if (!confirm('Reset all progress and start from level 1?')) return;
+      state.solved = {};
+      state.levelIndex = 0;
+      state.usedHelp = false;
+      state.hintsShown = 0;
+      state.tree = null;
+      save();
+      render();
+      clearFeedback();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && state.armed) { state.armed = null; updateArmedUI(); clearFeedback(); }
+    });
+    document.body.addEventListener('dragend', endDrag);
+
+    load();
+    state.usedHelp = state.solved[state.levelIndex] === 'silver';
+    render();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+</script>
 </body>
 </html>

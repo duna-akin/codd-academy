@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relational Algebra Playground</title>
+<style>/*{{STYLES}}*/</style>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='56'>π</text></svg>">
+</head>
+<body>
+<canvas id="confetti" class="confetti" hidden></canvas>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">π</span>
+    <div>
+      <h1>Relational Algebra Playground</h1>
+      <p class="tagline">Drag operators onto the canvas to answer each question.</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="progress" class="progress">0 / 0 solved</span>
+    <button id="btnReset" class="btn btn-ghost" type="button">Reset progress</button>
+  </div>
+</header>
+
+<nav id="pills" class="pills" aria-label="Levels"></nav>
+
+<div class="layout">
+  <aside class="panel panel-left">
+    <section class="block">
+      <h2 class="block-title">Operators</h2>
+      <p class="block-sub">Drag one onto the canvas, or click it and then click a slot.</p>
+      <div id="palette" class="palette"></div>
+    </section>
+
+    <section class="block">
+      <h2 class="block-title">Database: <span id="dbName"></span></h2>
+      <p id="dbBlurb" class="block-sub"></p>
+      <div id="tables" class="tables"></div>
+    </section>
+  </aside>
+
+  <main class="panel panel-main">
+    <section class="question-card">
+      <div class="question-head">
+        <span id="levelLabel" class="level-label"></span>
+        <h2 id="levelTitle" class="level-title"></h2>
+      </div>
+      <p id="question" class="question"></p>
+      <p id="tip" class="tip"></p>
+    </section>
+
+    <section class="block block-canvas">
+      <div class="block-head">
+        <h2 class="block-title">Your query</h2>
+        <div class="toolbar">
+          <button id="btnPrev" class="btn btn-ghost" type="button">‹ Prev</button>
+          <button id="btnNext" class="btn btn-ghost" type="button">Next ›</button>
+          <button id="btnClear" class="btn btn-ghost" type="button">Clear</button>
+          <button id="btnHint" class="btn btn-ghost" type="button">Hint</button>
+          <button id="btnSolution" class="btn btn-ghost" type="button">Show solution</button>
+          <button id="btnCheck" class="btn btn-primary" type="button">Check answer</button>
+        </div>
+      </div>
+      <div id="canvas" class="canvas"></div>
+      <div class="formula-bar">
+        <span class="formula-label">Expression</span>
+        <div id="formula" class="formula"></div>
+      </div>
+      <div id="feedback" class="feedback"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2 class="block-title">Result</h2>
+        <span id="outputMeta" class="output-meta"></span>
+      </div>
+      <div id="output" class="output output-muted"></div>
+    </section>
+  </main>
+</div>
+
+<footer class="footer">
+  <p>
+    <b>Conditions:</b> <code>salary &gt; 60000</code>, <code>dept = 'Sales'</code>, combine with
+    <code>AND</code> / <code>OR</code> / <code>NOT</code> and parentheses. Text values need quotes.
+    <b>Deleting</b> an operator promotes whatever was inside it, so you can peel a query apart layer by layer.
+  </p>
+</footer>
+
+<script>/*{{SCRIPTS}}*/</script>
+</body>
+</html>

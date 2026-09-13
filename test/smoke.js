@@ -1,6 +1,6 @@
 /* End-to-end smoke test: drives the real UI in jsdom. Run with: npm test */
 const { JSDOM } = require('jsdom');
-const path = require('path').join(__dirname, '..', 'index.html');
+const path = process.argv[2] || require('path').join(__dirname, '..', 'index.html');
 const errors = [];
 
 JSDOM.fromFile(path, {
