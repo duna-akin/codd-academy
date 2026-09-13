@@ -85,6 +85,13 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .pill.solved { color: var(--good); border-color: #34d39955; }
 .pill.solved.gold { color: var(--amber); border-color: #fbbf2455; }
 .pill.locked { opacity: .4; cursor: not-allowed; }
+/* flex-basis:100% forces each chapter onto its own row of pills */
+.pill-chapter {
+  flex-basis: 100%; margin: 6px 0 -2px;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 1.1px;
+  color: var(--text-faint); font-weight: 700;
+}
+.pill-chapter:first-child { margin-top: 0; }
 
 /* ---------- layout ---------- */
 

@@ -469,7 +469,9 @@
       if (state.solved[i]) cls += ' solved ' + state.solved[i];
       if (i >= unlocked) cls += ' locked';
       var mark = state.solved[i] === 'gold' ? '★' : (state.solved[i] ? '✓' : (i >= unlocked ? '🔒' : i + 1));
-      return '<button class="' + cls + '" data-i="' + i + '" title="' + esc(lv.title) + '">' + mark + '</button>';
+      var heading = lv.chapter ? '<span class="pill-chapter">' + esc(lv.chapter) + '</span>' : '';
+      return heading + '<button class="' + cls + '" data-i="' + i + '" title="' +
+        esc((i + 1) + '. ' + lv.title) + '">' + mark + '</button>';
     }).join('');
     el.pills.querySelectorAll('.pill').forEach(function (p) {
       p.addEventListener('click', function () { goToLevel(parseInt(p.dataset.i, 10)); });

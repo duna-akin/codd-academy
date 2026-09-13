@@ -37,6 +37,22 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
 - Solving a level without hints earns ★; solving it after a hint or the solution earns ✓. Progress
   is kept in `localStorage`.
 
+## The levels
+
+Twenty-five puzzles in five chapters:
+
+| Chapter | Levels | What it teaches |
+| --- | --- | --- |
+| Basics | 1–6 | a bare relation, π, σ, compound conditions |
+| Set operations | 7–10 | ρ, ∪, −, ∩ and union compatibility |
+| Joins | 11–13 | natural joins across three relations, filtering around them |
+| Products and division | 14–16 | ρ + × to compare a relation with itself, ÷ for "for all" |
+| Advanced | 17–25 | theta joins, self-joins for "at least two" and "exactly one", max without aggregation, "only", division by a derived relation, universal quantification by double negation |
+
+The advanced chapter is where relational algebra stops being a notation for SQL and starts being a
+logic: with no aggregation and no counting, `MAX` becomes "nobody beats me", `only` becomes "has no
+counterexample", and `for all` becomes either ÷ or a difference of two differences.
+
 ## Conditions
 
 `salary > 60000`, `dept = 'Sales'`, `A.eid < B.eid`, combined with `AND` / `OR` / `NOT` and
@@ -52,7 +68,7 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     src/index.template.html  markup, with placeholders for the inlined CSS and JS
     src/styles.css           all styling
     src/engine.js            relational algebra engine: relations, operators, condition parser, checking
-    src/levels.js            the two databases and the 16 puzzles (each solution is an expression tree)
+    src/levels.js            the two databases and the 25 puzzles (each solution is an expression tree)
     src/app.js               UI: drag and drop, tree editing, live evaluation, progress
     test/smoke.js            end-to-end test that drives the real UI in jsdom
 
@@ -62,7 +78,7 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     npm test         # builds, then drives the built index.html
 
 The smoke test boots the page, places nodes by click and by drop, checks a wrong answer and a
-broken condition, then solves all 16 levels through the UI and asserts there are no console errors.
+broken condition, then solves all 25 levels through the UI and asserts there are no console errors.
 Point it at any copy of the built file to prove that copy stands alone:
 
     node test/smoke.js /some/other/place/index.html
@@ -78,6 +94,7 @@ Append to `LEVELS` in `src/levels.js`, then `npm run build`. Solutions are expre
   title: 'Filter, then project',
   question: 'Return the names of employees who earn more than 60000.',
   focus: ['project'],              // marks the operator "new" in the palette
+  chapter: 'Basics',               // optional: starts a new row in the level bar
   tip: 'Shown under the question.',
   hints: ['Revealed one at a time.'],
   checkNames: true,                // optional: require exact column names

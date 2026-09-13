@@ -65,7 +65,8 @@
           ['C1', 'Databases',  'CS',      4],
           ['C2', 'Algorithms', 'CS',      3],
           ['C3', 'Calculus',   'Math',    4],
-          ['C4', 'Optics',     'Physics', 3]
+          ['C4', 'Optics',     'Physics', 3],
+          ['C5', 'Topology',   'Math',    3]
         ]),
         R('Enrolled', ['sid', 'cid', 'grade'], [
           ['S1', 'C1', 'A'],
@@ -85,6 +86,7 @@
   var LEVELS = [
     {
       db: 'company',
+      chapter: 'Basics',
       title: 'The whole table',
       question: 'Return every employee, with all of their details.',
       focus: [],
@@ -163,6 +165,7 @@
     },
     {
       db: 'company',
+      chapter: 'Set operations',
       title: 'Renaming things',
       question: 'Build a relation called <b>Roster</b> whose two columns are named <b>id</b> and <b>person</b>, ' +
                'holding every employee id and name.',
@@ -227,6 +230,7 @@
     },
     {
       db: 'company',
+      chapter: 'Joins',
       title: 'Connecting relations',
       question: 'Return each employee name paired with the name of every project they work on.',
       focus: ['join'],
@@ -272,6 +276,7 @@
     },
     {
       db: 'company',
+      chapter: 'Products and division',
       title: 'Comparing a table to itself',
       question: 'Return every pair of distinct employee names who share a department. ' +
                'List each pair once, not twice.',
@@ -311,7 +316,7 @@
     },
     {
       db: 'school',
-      title: 'Final exam',
+      title: 'Every course in a department',
       question: 'Return the names of students who have taken every CS course.',
       focus: [],
       tip: 'Division finds the students; a join turns their ids into names.',
@@ -326,6 +331,203 @@
           op('divide', '', [
             op('project', 'sid, cid', [rel('Enrolled')]),
             op('project', 'cid', [op('select', "cdept = 'CS'", [rel('Course')])])
+          ])
+        ])
+      ])
+    },
+    {
+      db: 'company',
+      chapter: 'Advanced',
+      title: 'Matchmaking',
+      question: 'Return each department together with the name of its head. ' +
+               '(Department.head holds an employee id.)',
+      focus: [],
+      tip: 'A natural join is no help here: the columns to match are called <code>head</code> on one ' +
+           'side and <code>eid</code> on the other. Type a condition into <b>⋈</b> to make it a theta join.',
+      hints: [
+        'Put Department on the left of ⋈ and Employee on the right, then fill in the condition box.',
+        'The condition is head = eid. Both relations also have a dept column, so the result calls them ' +
+          'Department.dept and Employee.dept.',
+        'π<sub>Department.dept, ename</sub>(Department ⋈<sub>head = eid</sub> Employee)'
+      ],
+      solution: op('project', 'Department.dept, ename', [
+        op('join', 'head = eid', [rel('Department'), rel('Employee')])
+      ])
+    },
+    {
+      db: 'school',
+      title: 'Nobody signed up',
+      question: 'Return the id and title of every course that no student is enrolled in.',
+      focus: [],
+      tip: 'Difference finds what is missing, but it can only return the columns you subtracted with. ' +
+           'Join back to recover the rest.',
+      hints: [
+        'Start with π(cid) of Course minus π(cid) of Enrolled.',
+        'That gives you bare ids — join the result back to Course to get titles.',
+        'π<sub>cid, title</sub>(Course ⋈ (π<sub>cid</sub>(Course) − π<sub>cid</sub>(Enrolled)))'
+      ],
+      solution: op('project', 'cid, title', [
+        op('join', '', [
+          rel('Course'),
+          op('difference', '', [
+            op('project', 'cid', [rel('Course')]),
+            op('project', 'cid', [rel('Enrolled')])
+          ])
+        ])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'At least two',
+      question: 'Return the ids of employees who work on at least two different projects.',
+      focus: [],
+      tip: 'Counting is not an operator here. To say "two different", pair WorksOn with itself and ' +
+           'demand the two project ids differ.',
+      hints: [
+        'Rename WorksOn to A and B, take the product, and keep rows where A.eid = B.eid.',
+        'A.pid < B.pid makes the two projects different and stops each pair being found twice.',
+        'π<sub>A.eid</sub>(σ<sub>A.eid = B.eid AND A.pid &lt; B.pid</sub>(ρ<sub>A</sub>(WorksOn) × ρ<sub>B</sub>(WorksOn)))'
+      ],
+      solution: op('project', 'A.eid', [
+        op('select', 'A.eid = B.eid AND A.pid < B.pid', [
+          op('product', '', [
+            op('rename', 'A', [rel('WorksOn')]),
+            op('rename', 'B', [rel('WorksOn')])
+          ])
+        ])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Exactly one',
+      question: 'Return the ids of employees who work on exactly one project.',
+      focus: [],
+      tip: 'Exactly one = at least one, minus at least two. You built the second half last level.',
+      hints: [
+        'The left side is simply π<sub>eid</sub>(WorksOn) — everyone with at least one project.',
+        'The right side is the whole "at least two" query from the previous level.',
+        'π<sub>eid</sub>(WorksOn) − π<sub>A.eid</sub>(σ<sub>A.eid = B.eid AND A.pid &lt; B.pid</sub>' +
+          '(ρ<sub>A</sub>(WorksOn) × ρ<sub>B</sub>(WorksOn)))'
+      ],
+      solution: op('difference', '', [
+        op('project', 'eid', [rel('WorksOn')]),
+        op('project', 'A.eid', [
+          op('select', 'A.eid = B.eid AND A.pid < B.pid', [
+            op('product', '', [
+              op('rename', 'A', [rel('WorksOn')]),
+              op('rename', 'B', [rel('WorksOn')])
+            ])
+          ])
+        ])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'The biggest one',
+      question: 'Return the id of the highest-paid employee — without any aggregation.',
+      focus: [],
+      tip: 'Relational algebra has no MAX. The trick: the maximum is the one nobody beats. ' +
+           'Find everyone who <i>is</i> beaten, then subtract them from everyone.',
+      hints: [
+        'Pair Employee with itself as A and B, and keep rows where A.salary < B.salary. ' +
+          'Those A values are the losers.',
+        'Subtract the losers from π<sub>eid</sub>(Employee).',
+        'π<sub>eid</sub>(Employee) − π<sub>A.eid</sub>(σ<sub>A.salary &lt; B.salary</sub>' +
+          '(ρ<sub>A</sub>(Employee) × ρ<sub>B</sub>(Employee)))'
+      ],
+      solution: op('difference', '', [
+        op('project', 'eid', [rel('Employee')]),
+        op('project', 'A.eid', [
+          op('select', 'A.salary < B.salary', [
+            op('product', '', [
+              op('rename', 'A', [rel('Employee')]),
+              op('rename', 'B', [rel('Employee')])
+            ])
+          ])
+        ])
+      ])
+    },
+    {
+      db: 'school',
+      title: 'Nothing but',
+      question: 'Return the names of students who are enrolled only in CS courses ' +
+               '(and are enrolled in at least one).',
+      focus: [],
+      tip: '"Only X" means "has no non-X". Find the students who break the rule, and subtract them.',
+      hints: [
+        'Join Enrolled to Course, then select the enrolments where cdept is not CS. ' +
+          'Use &lt;&gt; for "not equal".',
+        'Those sids are the students to exclude: π<sub>sid</sub>(Enrolled) minus them.',
+        "π<sub>sname</sub>(Student ⋈ (π<sub>sid</sub>(Enrolled) − π<sub>sid</sub>(σ<sub>cdept &lt;&gt; 'CS'</sub>(Enrolled ⋈ Course))))"
+      ],
+      solution: op('project', 'sname', [
+        op('join', '', [
+          rel('Student'),
+          op('difference', '', [
+            op('project', 'sid', [rel('Enrolled')]),
+            op('project', 'sid', [
+              op('select', "cdept <> 'CS'", [op('join', '', [rel('Enrolled'), rel('Course')])])
+            ])
+          ])
+        ])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Keeping up with Cleo',
+      question: 'Return the ids of employees who work on every project that Cleo (E3) works on.',
+      focus: [],
+      tip: 'Division again — but this time the divisor is itself a query, not a whole relation.',
+      hints: [
+        'The divisor is the set of project ids Cleo works on: filter WorksOn on eid, then project pid.',
+        'Divide π<sub>eid, pid</sub>(WorksOn) by that.',
+        "π<sub>eid, pid</sub>(WorksOn) ÷ π<sub>pid</sub>(σ<sub>eid = 'E3'</sub>(WorksOn))"
+      ],
+      solution: op('divide', '', [
+        op('project', 'eid, pid', [rel('WorksOn')]),
+        op('project', 'pid', [op('select', "eid = 'E3'", [rel('WorksOn')])])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'True of everyone',
+      question: 'Return the departments in which <i>every</i> employee earns more than 55000.',
+      focus: [],
+      tip: 'Division is not the only way to say "for all". A statement is true of everyone exactly ' +
+           'when there is no counterexample.',
+      hints: [
+        'The counterexamples are employees earning 55000 or less. Which departments do they sit in?',
+        'Take every department that has employees, and subtract the departments that have a counterexample.',
+        'π<sub>dept</sub>(Employee) − π<sub>dept</sub>(σ<sub>salary &lt;= 55000</sub>(Employee))'
+      ],
+      solution: op('difference', '', [
+        op('project', 'dept', [rel('Employee')]),
+        op('project', 'dept', [op('select', 'salary <= 55000', [rel('Employee')])])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Final exam',
+      question: 'Return the names of employees who earn less than 90000 and work on ' +
+               '<i>every</i> project with a budget over 100000.',
+      focus: [],
+      tip: 'Everything at once: a filter feeding a division, a join to recover names, and a second ' +
+           'filter on the way out.',
+      hints: [
+        'Build the divisor first: the pids of projects with a budget over 100000.',
+        'Divide π<sub>eid, pid</sub>(WorksOn) by it, then join the resulting ids back to Employee.',
+        'Finish with σ on salary and π on ename.',
+        'π<sub>ename</sub>(σ<sub>salary &lt; 90000</sub>(Employee ⋈ (π<sub>eid, pid</sub>(WorksOn) ÷ ' +
+          'π<sub>pid</sub>(σ<sub>budget &gt; 100000</sub>(Project)))))'
+      ],
+      solution: op('project', 'ename', [
+        op('select', 'salary < 90000', [
+          op('join', '', [
+            rel('Employee'),
+            op('divide', '', [
+              op('project', 'eid, pid', [rel('WorksOn')]),
+              op('project', 'pid', [op('select', 'budget > 100000', [rel('Project')])])
+            ])
           ])
         ])
       ])
