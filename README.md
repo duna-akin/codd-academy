@@ -1,4 +1,5 @@
 # Relational Algebra Playground
+![demo](image.png)
 
 An interactive game for learning relational algebra. You are shown a set of relations and asked a
 question in English; you answer by dragging operator symbols (π, σ, ρ, ∪, ∩, −, ×, ⋈, ÷) onto a
