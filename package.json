@@ -1,0 +1,13 @@
+{
+  "name": "relational-algebra-playground",
+  "version": "1.0.0",
+  "description": "A drag-and-drop game for learning relational algebra",
+  "private": true,
+  "scripts": {
+    "test": "node test/smoke.js",
+    "serve": "python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "jsdom": "^27.0.0"
+  }
+}
