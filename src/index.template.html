@@ -77,8 +77,14 @@
       </div>
       <div class="expr-type">
         <label class="formula-label" for="exprInput">Type it</label>
-        <input id="exprInput" class="expr-input" type="text" spellcheck="false" autocomplete="off"
-               autocapitalize="off" placeholder="π_{ename}(σ_{salary &gt; 60000}(Employee))">
+        <div class="expr-wrap">
+          <input id="exprInput" class="expr-input" type="text" spellcheck="false" autocomplete="off"
+                 autocapitalize="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
+                 aria-controls="exprSuggest"
+                 placeholder="type project, select, Employee … then press Tab">
+          <span id="exprMirror" class="expr-mirror" aria-hidden="true"></span>
+          <ul id="exprSuggest" class="suggest" role="listbox" hidden></ul>
+        </div>
       </div>
       <p id="exprError" class="expr-error" hidden></p>
       <div id="feedback" class="feedback"></div>
@@ -99,6 +105,13 @@
     <b>Conditions:</b> <code>salary &gt; 60000</code>, <code>dept = 'Sales'</code>, combine with
     <code>AND</code> / <code>OR</code> / <code>NOT</code> and parentheses. Text values need quotes.
     <b>Deleting</b> an operator promotes whatever was inside it, so you can peel a query apart layer by layer.
+  </p>
+  <p>
+    <b>Tab to complete:</b> type <code>proj</code> in the <i>Type it</i> box and press
+    <kbd>Tab</kbd> to get <code>π_{}()</code> with the cursor in the braces. Inside braces it
+    suggests attribute names, outside them relation names; <kbd>Tab</kbd> with no menu open jumps to
+    the next empty spot, so <code>proj</code> ⇥ <code>ena</code> ⇥ ⇥ <code>Emp</code> ⇥ writes the
+    whole query. <kbd>↑</kbd><kbd>↓</kbd> pick, <kbd>Esc</kbd> dismisses, <kbd>Enter</kbd> checks.
   </p>
   <p>
     <b>Typing:</b> the <i>Type it</i> box takes standard notation —

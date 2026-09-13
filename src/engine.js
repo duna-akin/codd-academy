@@ -561,6 +561,8 @@
       if (s[i] === '?') { i++; return null; }              // an empty slot
       if (s[i] === '(') {
         i++;
+        ws();
+        if (s[i] === ')') { i++; return null; }   // "()" is an empty slot
         var inner = expression();
         ws();
         if (s[i] !== ')') fail('Missing a closing ")"');
@@ -593,8 +595,9 @@
         ws();
         if (s[i] !== '(') fail('Expected "(" after ' + OPS[opName].symbol + '_{' + p + '}');
         i++;
-        var child = expression();
         ws();
+        var child = null;
+        if (s[i] !== ')') { child = expression(); ws(); }   // "()" is an empty slot
         if (s[i] !== ')') fail('Missing a closing ")"');
         i++;
         return { type: 'op', op: opName, param: p, children: [child] };

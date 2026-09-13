@@ -359,6 +359,150 @@
     }
   }
 
+  /* ---------- autocomplete in the expression box ---------- */
+
+  // Unary operators and ⋈ land you inside {} ready to type the parameter.
+  var COMPLETIONS = [
+    { word: 'project',    insert: 'π_{}()', caret: 3 }, { word: 'pi',        insert: 'π_{}', caret: 3 },
+    { word: 'select',     insert: 'σ_{}()', caret: 3 }, { word: 'sigma',     insert: 'σ_{}', caret: 3 },
+    { word: 'rename',     insert: 'ρ_{}()', caret: 3 }, { word: 'rho',       insert: 'ρ_{}', caret: 3 },
+    { word: 'join',       insert: '⋈ ' },
+    { word: 'union',      insert: '∪ ' },
+    { word: 'intersect',  insert: '∩ ' },
+    { word: 'minus',      insert: '− ' }, { word: 'difference', insert: '− ' },
+    { word: 'except',     insert: '− ' },
+    { word: 'product',    insert: '× ' }, { word: 'times',      insert: '× ' },
+    { word: 'cross',      insert: '× ' },
+    { word: 'divide',     insert: '÷ ' }
+  ].map(function (c) {
+    var opName = { 'π': 'project', 'σ': 'select', 'ρ': 'rename', '⋈': 'join', '∪': 'union',
+                   '∩': 'intersect', '−': 'difference', '×': 'product', '÷': 'divide' }[c.insert[0]];
+    return { kind: 'op', word: c.word, insert: c.insert, caret: c.caret,
+             symbol: c.insert[0], hint: OPS[opName].hint };
+  });
+
+  var suggest = { items: [], index: 0, open: false };
+
+  // Inside {...} or [...] you are writing a parameter, so offer attributes.
+  function inParameter(text, caret) {
+    var depth = 0;
+    for (var i = 0; i < caret; i++) {
+      if (text[i] === '{' || text[i] === '[') depth++;
+      else if (text[i] === '}' || text[i] === ']') depth = Math.max(0, depth - 1);
+    }
+    return depth > 0;
+  }
+
+  function currentWord() {
+    var caret = el.exprInput.selectionStart;
+    var m = /[A-Za-z_][A-Za-z0-9_.]*$/.exec(el.exprInput.value.slice(0, caret));
+    return { text: m ? m[0] : '', start: m ? caret - m[0].length : caret, caret: caret };
+  }
+
+  function candidates(prefix, inParam) {
+    var info = DATABASES[level().db];
+    var list = [];
+    if (inParam) {
+      var seen = {};
+      info.relations.forEach(function (r) {
+        r.attrs.forEach(function (a) {
+          if (seen[a]) return;
+          seen[a] = true;
+          list.push({ kind: 'attr', word: a, insert: a, symbol: '·', hint: 'attribute of ' + r.name });
+        });
+      });
+    } else {
+      list = COMPLETIONS.concat(info.relations.map(function (r) {
+        return { kind: 'rel', word: r.name, insert: r.name, symbol: '▦',
+                 hint: r.attrs.join(', ') };
+      }));
+    }
+    var low = prefix.toLowerCase();
+    return list.filter(function (c) {
+      return c.word.toLowerCase().indexOf(low) === 0 && c.word.toLowerCase() !== low;
+    }).slice(0, 8);
+  }
+
+  function caretPixels(index) {
+    el.exprMirror.textContent = el.exprInput.value.slice(0, index);
+    return el.exprMirror.offsetWidth;
+  }
+
+  function openSuggest() {
+    var word = currentWord();
+    if (!word.text) return closeSuggest();
+    var items = candidates(word.text, inParameter(el.exprInput.value, word.caret));
+    if (!items.length) return closeSuggest();
+
+    suggest.items = items;
+    suggest.index = 0;
+    suggest.open = true;
+    suggest.wordStart = word.start;
+    renderSuggest();
+    var left = Math.max(0, caretPixels(word.start) - el.exprInput.scrollLeft);
+    el.exprSuggest.style.left = Math.min(left, el.exprInput.clientWidth - 120) + 'px';
+    el.exprSuggest.hidden = false;
+    el.exprInput.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeSuggest() {
+    suggest.open = false;
+    el.exprSuggest.hidden = true;
+    el.exprInput.setAttribute('aria-expanded', 'false');
+  }
+
+  function renderSuggest() {
+    el.exprSuggest.innerHTML = suggest.items.map(function (c, i) {
+      return '<li class="suggest-item' + (i === suggest.index ? ' active' : '') + '" data-i="' + i +
+        '" role="option" aria-selected="' + (i === suggest.index) + '">' +
+        '<span class="s-sym s-' + c.kind + '">' + esc(c.symbol) + '</span>' +
+        '<span class="s-word">' + esc(c.word) + '</span>' +
+        '<span class="s-hint">' + esc(c.hint) + '</span></li>';
+    }).join('');
+    el.exprSuggest.querySelectorAll('.suggest-item').forEach(function (li) {
+      // mousedown, not click: a click would blur the input first.
+      li.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        accept(suggest.items[parseInt(li.dataset.i, 10)]);
+      });
+    });
+  }
+
+  function moveSuggest(delta) {
+    suggest.index = (suggest.index + delta + suggest.items.length) % suggest.items.length;
+    renderSuggest();
+  }
+
+  function accept(item) {
+    if (!item) return;
+    var input = el.exprInput;
+    var word = currentWord();
+    var before = input.value.slice(0, word.start);
+    var after = input.value.slice(word.caret);
+    input.value = before + item.insert + after;
+    var pos = word.start + (item.caret != null ? item.caret : item.insert.length);
+    input.setSelectionRange(pos, pos);
+    closeSuggest();
+    onExprInput({ noSuggest: true });
+  }
+
+  /* Tab out of a finished parameter and into the operand that follows:
+     π_{ename|}()  ->  π_{ename}(|)  ->  π_{ename}(Employee)| */
+  function jumpToNextHole() {
+    var input = el.exprInput, text = input.value, from = input.selectionStart;
+    if (input.selectionStart !== input.selectionEnd) return false;
+    var closer = -1;
+    for (var i = from; i < text.length; i++) {
+      if (text[i] === '}' || text[i] === ']' || text[i] === ')') { closer = i; break; }
+    }
+    if (closer === -1) return false;            // nothing to skip; let Tab move focus
+    var pos = closer + 1;
+    if (text[pos] === '(') pos++;               // land inside the operand parens
+    input.setSelectionRange(pos, pos);
+    closeSuggest();
+    return true;
+  }
+
   function setExprError(msg) {
     el.exprError.textContent = msg || '';
     el.exprError.hidden = !msg;
@@ -366,15 +510,20 @@
 
   // Typing edits the same tree the canvas does; whichever one you are not
   // touching follows along.
-  function onExprInput() {
+  var errorTimer = null;
+  function onExprInput(options) {
+    clearTimeout(errorTimer);
     try {
       state.tree = RA.parseExpression(el.exprInput.value);
       setExprError('');
       renderTree();
       refreshOutput();
     } catch (e) {
-      setExprError(e.message);
+      // Half-typed expressions are always invalid; only complain once you stop.
+      setExprError('');
+      errorTimer = setTimeout(function () { setExprError(e.message); }, 700);
     }
+    if (!(options && options.noSuggest)) openSuggest();
   }
 
   function refreshOutput() {
@@ -584,6 +733,7 @@
   function init() {
     ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
      'tables', 'palette', 'canvas', 'formula', 'exprInput', 'exprError',
+     'exprSuggest', 'exprMirror',
      'output', 'outputMeta', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
@@ -592,9 +742,35 @@
     el.hint = document.getElementById('btnHint');
 
     el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
-    el.exprInput.addEventListener('input', onExprInput);
-    el.exprInput.addEventListener('blur', function () { setExprError(''); refreshOutput(); });
+    el.exprInput.addEventListener('input', function () { onExprInput(); });
+    el.exprInput.addEventListener('blur', function () {
+      closeSuggest();
+      clearTimeout(errorTimer);
+      setExprError('');
+      refreshOutput();
+    });
     el.exprInput.addEventListener('keydown', function (e) {
+      // Typing a closer that is already there just steps over it.
+      if (e.key === ')' || e.key === '}' || e.key === ']') {
+        var at = el.exprInput.selectionStart;
+        if (el.exprInput.selectionEnd === at && el.exprInput.value[at] === e.key) {
+          e.preventDefault();
+          el.exprInput.setSelectionRange(at + 1, at + 1);
+          return;
+        }
+      }
+      if (suggest.open) {
+        if (e.key === 'Tab' || e.key === 'Enter') {
+          e.preventDefault();
+          accept(suggest.items[suggest.index]);
+          return;
+        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveSuggest(1); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); moveSuggest(-1); return; }
+        if (e.key === 'Escape') { e.preventDefault(); closeSuggest(); return; }
+      }
+      // With no menu open, Tab steps to the next hole in the expression.
+      if (e.key === 'Tab' && !e.shiftKey && jumpToNextHole()) { e.preventDefault(); return; }
       if (e.key === 'Enter') { e.preventDefault(); check(); }
     });
     document.getElementById('btnCheck').addEventListener('click', check);

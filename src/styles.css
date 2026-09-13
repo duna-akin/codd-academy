@@ -286,6 +286,39 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 }
 .expr-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(231, 154, 168, .18); }
 .expr-input::placeholder { color: #6d5b5f; }
+
+.expr-wrap { position: relative; flex: 1; min-width: 0; }
+.expr-wrap .expr-input { width: 100%; }
+/* measures caret position so the menu opens under the word being typed */
+.expr-mirror {
+  position: absolute; visibility: hidden; white-space: pre; pointer-events: none;
+  font-family: var(--mono); font-size: 14px; left: 0; top: 0;
+}
+.suggest {
+  position: absolute; top: calc(100% + 5px); z-index: 30;
+  margin: 0; padding: 4px; list-style: none;
+  min-width: 240px; max-width: 440px;
+  background: var(--bg-raised); border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+}
+.suggest-item {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 6px 9px; border-radius: 6px; cursor: pointer;
+}
+.suggest-item.active { background: var(--accent-deep); }
+.suggest-item.active .s-hint { color: #f3d9de; }
+.suggest-item.active .s-word { color: #fff; }
+.s-sym {
+  font-family: var(--mono); font-size: 15px; width: 18px; flex-shrink: 0; text-align: center;
+  color: var(--accent);
+}
+.s-sym.s-rel { color: var(--blue); font-size: 12px; }
+.s-sym.s-attr { color: var(--warm); }
+.s-word { font-family: var(--mono); font-size: 13px; color: var(--text); flex-shrink: 0; }
+.s-hint {
+  font-size: 11.5px; color: var(--text-faint); margin-left: auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .expr-error {
   margin: 7px 0 0; padding: 7px 11px; border-radius: 7px;
   background: #2e1417; border: 1px solid var(--bad); color: #f6d2ce;
@@ -313,6 +346,10 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
 .footer { padding: 0 22px 30px; color: var(--text-faint); font-size: 12.5px; max-width: 1000px; }
 .footer b { color: var(--text-dim); }
+.footer kbd {
+  font-family: var(--mono); font-size: 11px; padding: 1px 5px; border-radius: 4px;
+  background: var(--bg-raised); border: 1px solid var(--line); color: var(--text-dim);
+}
 
 .confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
 

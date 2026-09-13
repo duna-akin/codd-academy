@@ -13,8 +13,9 @@ JSDOM.fromFile(path, {
     .on('jsdomError', e => { if (!/getContext/.test(e.message)) errors.push('jsdomError: ' + e.message); })
     .on('error', (...a) => errors.push('console.error: ' + a.join(' ')))
 }).then(dom => new Promise(r => dom.window.addEventListener('load', () => setTimeout(() => r(dom), 120))))
-.then(dom => {
+.then(async dom => {
   const { window } = dom;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const doc = window.document;
   const $ = s => doc.querySelector(s);
   const click = n => n.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -101,8 +102,11 @@ JSDOM.fromFile(path, {
   const before = doc.querySelectorAll('.node').length;
   expr.value = 'project_{ename}(Employee';
   expr.dispatchEvent(new window.Event('input', { bubbles: true }));
-  console.log('synerr:', text('#exprError').trim(), '| canvas kept =',
-              doc.querySelectorAll('.node').length === before);
+  const quiet = $('#exprError').hidden;          // silent while you are still typing
+  await sleep(900);                              // ...then it explains itself
+  console.log('synerr:', text('#exprError').trim(), '| silent while typing =', quiet,
+              '| canvas kept =', doc.querySelectorAll('.node').length === before);
+  if (!quiet) errors.push('syntax errors should stay quiet until typing pauses');
   if ($('#exprError').hidden || doc.querySelectorAll('.node').length !== before) {
     errors.push('a syntax error should be reported without destroying the canvas');
   }
@@ -114,6 +118,52 @@ JSDOM.fromFile(path, {
   drop(doc.querySelector('.node'), { kind: 'op', value: 'project' });
   console.log('sync  :', 'canvas -> text =', JSON.stringify(expr.value));
   if (expr.value !== 'π_{}(Employee)') errors.push('canvas edits did not reach the text box');
+
+  // 6. Autocomplete: build level 2's answer with nothing but letters and Tab.
+  click($('#btnClear'));
+  const menu = $('#exprSuggest');
+  const shown = () => menu.hidden ? '(closed)'
+    : [...menu.querySelectorAll('.s-word')].map(n => n.textContent).join(', ');
+  // capture the caret before assigning value — assignment moves it to the end
+  const type = t => {
+    const at = expr.selectionStart;
+    expr.value = expr.value.slice(0, at) + t + expr.value.slice(at);
+    expr.setSelectionRange(at + t.length, at + t.length);
+    expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  };
+  const key = k => {
+    const e = new window.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
+    expr.dispatchEvent(e);
+    return e;
+  };
+  expr.focus();
+  type('proj');
+  const opMenu = shown();
+  key('Tab');
+  const snippet = expr.value, snippetCaret = expr.selectionStart;
+  type('ena');
+  const attrMenu = shown();                     // attribute-aware inside {}
+  key('Tab'); key('Tab');                       // accept "ename", then step into ( )
+  type('Emp');
+  const relMenu = shown();
+  key('Tab');
+  console.log('menus :', 'after "proj" =', opMenu, '| inside {} after "ena" =', attrMenu,
+              '| after "Emp" =', relMenu);
+  console.log('tabbed:', JSON.stringify(snippet), 'caret', snippetCaret, '->', JSON.stringify(expr.value));
+  if (snippet !== 'π_{}()' || snippetCaret !== 3) errors.push('Tab did not insert the π snippet');
+  if (attrMenu !== 'ename') errors.push('no attribute suggestions inside {}');
+  if (expr.value !== 'π_{ename}(Employee)') errors.push('tab-completion did not finish the query');
+  click($('#btnCheck'));
+  console.log('check3:', text('#feedback').trim());
+  if (!/Correct/.test(text('#feedback'))) errors.push('the tab-completed answer was rejected');
+
+  // Typing a closer that is already present steps over it instead of doubling it.
+  expr.value = 'π_{a}(R)';
+  expr.setSelectionRange(7, 7);
+  const over = key(')');
+  console.log('typeover:', 'caret', expr.selectionStart, '| value', JSON.stringify(expr.value));
+  if (!over.defaultPrevented || expr.selectionStart !== 8) errors.push('closing-paren type-over failed');
+  expr.blur();
 
   // The walk below assumes it starts at level 1.
   click(doc.querySelectorAll('.pill')[0]);

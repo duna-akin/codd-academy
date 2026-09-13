@@ -67,6 +67,28 @@ counterexample", and `for all` becomes either ÷ or a difference of two differen
 Anything you can drag, you can type — the text box and the canvas edit one tree, so switching
 between them mid-query is fine. Unfilled slots show up as `?`.
 
+### Tab completion
+
+You never have to find the Greek keys. Type a few letters and press <kbd>Tab</kbd>:
+
+| You type | Tab gives you |
+| --- | --- |
+| `proj` | `π_{}()` with the cursor between the braces |
+| `sel` | `σ_{}()` |
+| `ren` | `ρ_{}()` |
+| `un`, `int`, `min`, `prod`, `div`, `join` | `∪ ∩ − × ÷ ⋈` |
+
+The menu knows where the cursor is: **inside** `{}` it offers attribute names, **outside** it offers
+relation names and operators. With no menu open, <kbd>Tab</kbd> jumps to the next empty spot in the
+expression, so the whole of level 2 is:
+
+    proj ⇥ ena ⇥ ⇥ Emp ⇥          →  π_{ename}(Employee)
+
+<kbd>↑</kbd>/<kbd>↓</kbd> move through the menu, <kbd>Esc</kbd> dismisses it, <kbd>Enter</kbd>
+checks your answer. Typing a `)` or `}` that is already there steps over it rather than doubling it,
+and a half-finished snippet such as `π_{}()` still draws on the canvas — the empty parentheses are
+an unfilled slot, exactly like `?`. Syntax errors stay quiet until you stop typing.
+
     π_{ename}(σ_{salary > 60000}(Employee))
     π_{ename, pname}((Employee ⋈ WorksOn) ⋈ Project)
     Department ⋈_{head = eid} Employee

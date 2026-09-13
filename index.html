@@ -293,6 +293,39 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 }
 .expr-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(231, 154, 168, .18); }
 .expr-input::placeholder { color: #6d5b5f; }
+
+.expr-wrap { position: relative; flex: 1; min-width: 0; }
+.expr-wrap .expr-input { width: 100%; }
+/* measures caret position so the menu opens under the word being typed */
+.expr-mirror {
+  position: absolute; visibility: hidden; white-space: pre; pointer-events: none;
+  font-family: var(--mono); font-size: 14px; left: 0; top: 0;
+}
+.suggest {
+  position: absolute; top: calc(100% + 5px); z-index: 30;
+  margin: 0; padding: 4px; list-style: none;
+  min-width: 240px; max-width: 440px;
+  background: var(--bg-raised); border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+}
+.suggest-item {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 6px 9px; border-radius: 6px; cursor: pointer;
+}
+.suggest-item.active { background: var(--accent-deep); }
+.suggest-item.active .s-hint { color: #f3d9de; }
+.suggest-item.active .s-word { color: #fff; }
+.s-sym {
+  font-family: var(--mono); font-size: 15px; width: 18px; flex-shrink: 0; text-align: center;
+  color: var(--accent);
+}
+.s-sym.s-rel { color: var(--blue); font-size: 12px; }
+.s-sym.s-attr { color: var(--warm); }
+.s-word { font-family: var(--mono); font-size: 13px; color: var(--text); flex-shrink: 0; }
+.s-hint {
+  font-size: 11.5px; color: var(--text-faint); margin-left: auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .expr-error {
   margin: 7px 0 0; padding: 7px 11px; border-radius: 7px;
   background: #2e1417; border: 1px solid var(--bad); color: #f6d2ce;
@@ -320,6 +353,10 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
 .footer { padding: 0 22px 30px; color: var(--text-faint); font-size: 12.5px; max-width: 1000px; }
 .footer b { color: var(--text-dim); }
+.footer kbd {
+  font-family: var(--mono); font-size: 11px; padding: 1px 5px; border-radius: 4px;
+  background: var(--bg-raised); border: 1px solid var(--line); color: var(--text-dim);
+}
 
 .confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
 
@@ -402,8 +439,14 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       </div>
       <div class="expr-type">
         <label class="formula-label" for="exprInput">Type it</label>
-        <input id="exprInput" class="expr-input" type="text" spellcheck="false" autocomplete="off"
-               autocapitalize="off" placeholder="π_{ename}(σ_{salary &gt; 60000}(Employee))">
+        <div class="expr-wrap">
+          <input id="exprInput" class="expr-input" type="text" spellcheck="false" autocomplete="off"
+                 autocapitalize="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
+                 aria-controls="exprSuggest"
+                 placeholder="type project, select, Employee … then press Tab">
+          <span id="exprMirror" class="expr-mirror" aria-hidden="true"></span>
+          <ul id="exprSuggest" class="suggest" role="listbox" hidden></ul>
+        </div>
       </div>
       <p id="exprError" class="expr-error" hidden></p>
       <div id="feedback" class="feedback"></div>
@@ -424,6 +467,13 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     <b>Conditions:</b> <code>salary &gt; 60000</code>, <code>dept = 'Sales'</code>, combine with
     <code>AND</code> / <code>OR</code> / <code>NOT</code> and parentheses. Text values need quotes.
     <b>Deleting</b> an operator promotes whatever was inside it, so you can peel a query apart layer by layer.
+  </p>
+  <p>
+    <b>Tab to complete:</b> type <code>proj</code> in the <i>Type it</i> box and press
+    <kbd>Tab</kbd> to get <code>π_{}()</code> with the cursor in the braces. Inside braces it
+    suggests attribute names, outside them relation names; <kbd>Tab</kbd> with no menu open jumps to
+    the next empty spot, so <code>proj</code> ⇥ <code>ena</code> ⇥ ⇥ <code>Emp</code> ⇥ writes the
+    whole query. <kbd>↑</kbd><kbd>↓</kbd> pick, <kbd>Esc</kbd> dismisses, <kbd>Enter</kbd> checks.
   </p>
   <p>
     <b>Typing:</b> the <i>Type it</i> box takes standard notation —
@@ -1002,6 +1052,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       if (s[i] === '?') { i++; return null; }              // an empty slot
       if (s[i] === '(') {
         i++;
+        ws();
+        if (s[i] === ')') { i++; return null; }   // "()" is an empty slot
         var inner = expression();
         ws();
         if (s[i] !== ')') fail('Missing a closing ")"');
@@ -1034,8 +1086,9 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         ws();
         if (s[i] !== '(') fail('Expected "(" after ' + OPS[opName].symbol + '_{' + p + '}');
         i++;
-        var child = expression();
         ws();
+        var child = null;
+        if (s[i] !== ')') { child = expression(); ws(); }   // "()" is an empty slot
         if (s[i] !== ')') fail('Missing a closing ")"');
         i++;
         return { type: 'op', op: opName, param: p, children: [child] };
@@ -2055,6 +2108,150 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     }
   }
 
+  /* ---------- autocomplete in the expression box ---------- */
+
+  // Unary operators and ⋈ land you inside {} ready to type the parameter.
+  var COMPLETIONS = [
+    { word: 'project',    insert: 'π_{}()', caret: 3 }, { word: 'pi',        insert: 'π_{}', caret: 3 },
+    { word: 'select',     insert: 'σ_{}()', caret: 3 }, { word: 'sigma',     insert: 'σ_{}', caret: 3 },
+    { word: 'rename',     insert: 'ρ_{}()', caret: 3 }, { word: 'rho',       insert: 'ρ_{}', caret: 3 },
+    { word: 'join',       insert: '⋈ ' },
+    { word: 'union',      insert: '∪ ' },
+    { word: 'intersect',  insert: '∩ ' },
+    { word: 'minus',      insert: '− ' }, { word: 'difference', insert: '− ' },
+    { word: 'except',     insert: '− ' },
+    { word: 'product',    insert: '× ' }, { word: 'times',      insert: '× ' },
+    { word: 'cross',      insert: '× ' },
+    { word: 'divide',     insert: '÷ ' }
+  ].map(function (c) {
+    var opName = { 'π': 'project', 'σ': 'select', 'ρ': 'rename', '⋈': 'join', '∪': 'union',
+                   '∩': 'intersect', '−': 'difference', '×': 'product', '÷': 'divide' }[c.insert[0]];
+    return { kind: 'op', word: c.word, insert: c.insert, caret: c.caret,
+             symbol: c.insert[0], hint: OPS[opName].hint };
+  });
+
+  var suggest = { items: [], index: 0, open: false };
+
+  // Inside {...} or [...] you are writing a parameter, so offer attributes.
+  function inParameter(text, caret) {
+    var depth = 0;
+    for (var i = 0; i < caret; i++) {
+      if (text[i] === '{' || text[i] === '[') depth++;
+      else if (text[i] === '}' || text[i] === ']') depth = Math.max(0, depth - 1);
+    }
+    return depth > 0;
+  }
+
+  function currentWord() {
+    var caret = el.exprInput.selectionStart;
+    var m = /[A-Za-z_][A-Za-z0-9_.]*$/.exec(el.exprInput.value.slice(0, caret));
+    return { text: m ? m[0] : '', start: m ? caret - m[0].length : caret, caret: caret };
+  }
+
+  function candidates(prefix, inParam) {
+    var info = DATABASES[level().db];
+    var list = [];
+    if (inParam) {
+      var seen = {};
+      info.relations.forEach(function (r) {
+        r.attrs.forEach(function (a) {
+          if (seen[a]) return;
+          seen[a] = true;
+          list.push({ kind: 'attr', word: a, insert: a, symbol: '·', hint: 'attribute of ' + r.name });
+        });
+      });
+    } else {
+      list = COMPLETIONS.concat(info.relations.map(function (r) {
+        return { kind: 'rel', word: r.name, insert: r.name, symbol: '▦',
+                 hint: r.attrs.join(', ') };
+      }));
+    }
+    var low = prefix.toLowerCase();
+    return list.filter(function (c) {
+      return c.word.toLowerCase().indexOf(low) === 0 && c.word.toLowerCase() !== low;
+    }).slice(0, 8);
+  }
+
+  function caretPixels(index) {
+    el.exprMirror.textContent = el.exprInput.value.slice(0, index);
+    return el.exprMirror.offsetWidth;
+  }
+
+  function openSuggest() {
+    var word = currentWord();
+    if (!word.text) return closeSuggest();
+    var items = candidates(word.text, inParameter(el.exprInput.value, word.caret));
+    if (!items.length) return closeSuggest();
+
+    suggest.items = items;
+    suggest.index = 0;
+    suggest.open = true;
+    suggest.wordStart = word.start;
+    renderSuggest();
+    var left = Math.max(0, caretPixels(word.start) - el.exprInput.scrollLeft);
+    el.exprSuggest.style.left = Math.min(left, el.exprInput.clientWidth - 120) + 'px';
+    el.exprSuggest.hidden = false;
+    el.exprInput.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeSuggest() {
+    suggest.open = false;
+    el.exprSuggest.hidden = true;
+    el.exprInput.setAttribute('aria-expanded', 'false');
+  }
+
+  function renderSuggest() {
+    el.exprSuggest.innerHTML = suggest.items.map(function (c, i) {
+      return '<li class="suggest-item' + (i === suggest.index ? ' active' : '') + '" data-i="' + i +
+        '" role="option" aria-selected="' + (i === suggest.index) + '">' +
+        '<span class="s-sym s-' + c.kind + '">' + esc(c.symbol) + '</span>' +
+        '<span class="s-word">' + esc(c.word) + '</span>' +
+        '<span class="s-hint">' + esc(c.hint) + '</span></li>';
+    }).join('');
+    el.exprSuggest.querySelectorAll('.suggest-item').forEach(function (li) {
+      // mousedown, not click: a click would blur the input first.
+      li.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        accept(suggest.items[parseInt(li.dataset.i, 10)]);
+      });
+    });
+  }
+
+  function moveSuggest(delta) {
+    suggest.index = (suggest.index + delta + suggest.items.length) % suggest.items.length;
+    renderSuggest();
+  }
+
+  function accept(item) {
+    if (!item) return;
+    var input = el.exprInput;
+    var word = currentWord();
+    var before = input.value.slice(0, word.start);
+    var after = input.value.slice(word.caret);
+    input.value = before + item.insert + after;
+    var pos = word.start + (item.caret != null ? item.caret : item.insert.length);
+    input.setSelectionRange(pos, pos);
+    closeSuggest();
+    onExprInput({ noSuggest: true });
+  }
+
+  /* Tab out of a finished parameter and into the operand that follows:
+     π_{ename|}()  ->  π_{ename}(|)  ->  π_{ename}(Employee)| */
+  function jumpToNextHole() {
+    var input = el.exprInput, text = input.value, from = input.selectionStart;
+    if (input.selectionStart !== input.selectionEnd) return false;
+    var closer = -1;
+    for (var i = from; i < text.length; i++) {
+      if (text[i] === '}' || text[i] === ']' || text[i] === ')') { closer = i; break; }
+    }
+    if (closer === -1) return false;            // nothing to skip; let Tab move focus
+    var pos = closer + 1;
+    if (text[pos] === '(') pos++;               // land inside the operand parens
+    input.setSelectionRange(pos, pos);
+    closeSuggest();
+    return true;
+  }
+
   function setExprError(msg) {
     el.exprError.textContent = msg || '';
     el.exprError.hidden = !msg;
@@ -2062,15 +2259,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
   // Typing edits the same tree the canvas does; whichever one you are not
   // touching follows along.
-  function onExprInput() {
+  var errorTimer = null;
+  function onExprInput(options) {
+    clearTimeout(errorTimer);
     try {
       state.tree = RA.parseExpression(el.exprInput.value);
       setExprError('');
       renderTree();
       refreshOutput();
     } catch (e) {
-      setExprError(e.message);
+      // Half-typed expressions are always invalid; only complain once you stop.
+      setExprError('');
+      errorTimer = setTimeout(function () { setExprError(e.message); }, 700);
     }
+    if (!(options && options.noSuggest)) openSuggest();
   }
 
   function refreshOutput() {
@@ -2280,6 +2482,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   function init() {
     ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
      'tables', 'palette', 'canvas', 'formula', 'exprInput', 'exprError',
+     'exprSuggest', 'exprMirror',
      'output', 'outputMeta', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
@@ -2288,9 +2491,35 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     el.hint = document.getElementById('btnHint');
 
     el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
-    el.exprInput.addEventListener('input', onExprInput);
-    el.exprInput.addEventListener('blur', function () { setExprError(''); refreshOutput(); });
+    el.exprInput.addEventListener('input', function () { onExprInput(); });
+    el.exprInput.addEventListener('blur', function () {
+      closeSuggest();
+      clearTimeout(errorTimer);
+      setExprError('');
+      refreshOutput();
+    });
     el.exprInput.addEventListener('keydown', function (e) {
+      // Typing a closer that is already there just steps over it.
+      if (e.key === ')' || e.key === '}' || e.key === ']') {
+        var at = el.exprInput.selectionStart;
+        if (el.exprInput.selectionEnd === at && el.exprInput.value[at] === e.key) {
+          e.preventDefault();
+          el.exprInput.setSelectionRange(at + 1, at + 1);
+          return;
+        }
+      }
+      if (suggest.open) {
+        if (e.key === 'Tab' || e.key === 'Enter') {
+          e.preventDefault();
+          accept(suggest.items[suggest.index]);
+          return;
+        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveSuggest(1); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); moveSuggest(-1); return; }
+        if (e.key === 'Escape') { e.preventDefault(); closeSuggest(); return; }
+      }
+      // With no menu open, Tab steps to the next hole in the expression.
+      if (e.key === 'Tab' && !e.shiftKey && jumpToNextHole()) { e.preventDefault(); return; }
       if (e.key === 'Enter') { e.preventDefault(); check(); }
     });
     document.getElementById('btnCheck').addEventListener('click', check);
