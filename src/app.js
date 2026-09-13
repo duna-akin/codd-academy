@@ -359,8 +359,30 @@
     }
   }
 
+  function setExprError(msg) {
+    el.exprError.textContent = msg || '';
+    el.exprError.hidden = !msg;
+  }
+
+  // Typing edits the same tree the canvas does; whichever one you are not
+  // touching follows along.
+  function onExprInput() {
+    try {
+      state.tree = RA.parseExpression(el.exprInput.value);
+      setExprError('');
+      renderTree();
+      refreshOutput();
+    } catch (e) {
+      setExprError(e.message);
+    }
+  }
+
   function refreshOutput() {
     el.formula.innerHTML = RA.toHTML(state.tree);
+    if (document.activeElement !== el.exprInput) {
+      el.exprInput.value = state.tree ? RA.toText(state.tree) : '';
+      setExprError('');
+    }
     var res = evaluateTree();
     if (res.ok) {
       el.outputMeta.textContent = res.relation.attrs.length + ' column' +
@@ -524,7 +546,7 @@
     if (!ctx) return;
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
-    var colors = ['#5eead4', '#a78bfa', '#fbbf24', '#f472b6', '#60a5fa'];
+    var colors = ['#e79aa8', '#910029', '#d8a657', '#e8e6e2', '#4ea8d8'];
     var bits = [];
     for (var i = 0; i < 90; i++) {
       bits.push({
@@ -561,7 +583,8 @@
 
   function init() {
     ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
-     'tables', 'palette', 'canvas', 'formula', 'output', 'outputMeta', 'feedback', 'confetti'
+     'tables', 'palette', 'canvas', 'formula', 'exprInput', 'exprError',
+     'output', 'outputMeta', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
     el.prev = document.getElementById('btnPrev');
@@ -569,6 +592,11 @@
     el.hint = document.getElementById('btnHint');
 
     el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
+    el.exprInput.addEventListener('input', onExprInput);
+    el.exprInput.addEventListener('blur', function () { setExprError(''); refreshOutput(); });
+    el.exprInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); check(); }
+    });
     document.getElementById('btnCheck').addEventListener('click', check);
     document.getElementById('btnClear').addEventListener('click', function () {
       state.tree = null;

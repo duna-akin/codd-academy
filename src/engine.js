@@ -458,6 +458,178 @@
       toHTML(kids[1]) + '<span class="f-paren">)</span>';
   }
 
+  /* ---------- typing an expression ---------- */
+
+  var UNARY_WORDS = {
+    'π': 'project', 'pi': 'project', 'project': 'project',
+    'σ': 'select', 'sigma': 'select', 'select': 'select',
+    'ρ': 'rename', 'rho': 'rename', 'rename': 'rename'
+  };
+  var BINARY_SYMBOLS = {
+    '∪': 'union', '∩': 'intersect', '−': 'difference', '-': 'difference',
+    '×': 'product', '*': 'product', '⋈': 'join', '÷': 'divide', '/': 'divide'
+  };
+  var BINARY_WORDS = {
+    'union': 'union', 'intersect': 'intersect',
+    'minus': 'difference', 'difference': 'difference', 'except': 'difference',
+    'product': 'product', 'times': 'product', 'cross': 'product',
+    'join': 'join', 'divide': 'divide'
+  };
+  var LOW_PRECEDENCE = { union: 1, intersect: 1, difference: 1 };
+  var HIGH_PRECEDENCE = { product: 1, join: 1, divide: 1 };
+  var IDENT = /^[A-Za-z_][A-Za-z0-9_]*/;
+  // Operator words are matched letters-only: "_" is a legal identifier
+  // character, so IDENT would swallow the "_" of "join_{...}".
+  var WORD = /^[A-Za-z]+/;
+
+  /* Parses standard notation into the same tree the canvas edits, so typing and
+     dragging are two views of one model. "?" stands for an unfilled slot. */
+  function parseExpression(text) {
+    var s = String(text == null ? '' : text);
+    var i = 0;
+
+    function fail(msg) { throw RAError(msg + ' (position ' + (i + 1) + ')'); }
+    function ws() { while (i < s.length && /\s/.test(s[i])) i++; }
+    function ident() { var m = IDENT.exec(s.slice(i)); return m ? m[0] : null; }
+    function word() { var m = WORD.exec(s.slice(i)); return m ? m[0] : null; }
+
+    function delimited(open, close) {
+      var depth = 0, start = ++i;
+      while (i < s.length) {
+        if (s[i] === open) depth++;
+        else if (s[i] === close) {
+          if (depth === 0) return s.slice(start, i++).trim();
+          depth--;
+        }
+        i++;
+      }
+      i = start;
+      fail('Missing a closing "' + close + '"');
+    }
+
+    // A parameter is _{...}, {...}, [...], or bare text after _ up to the "(".
+    function param() {
+      var save = i;
+      ws();
+      var underscore = s[i] === '_';
+      if (underscore) { i++; ws(); }
+      if (s[i] === '{') return delimited('{', '}');
+      if (s[i] === '[') return delimited('[', ']');
+      if (underscore) {
+        var start = i;
+        while (i < s.length && s[i] !== '(') i++;
+        var bare = s.slice(start, i).trim();
+        if (!bare) { i = save; fail('Expected a parameter after "_"'); }
+        return bare;
+      }
+      i = save;
+      return null;
+    }
+
+    function binaryOp() {
+      var save = i;
+      ws();
+      if (s.substr(i, 4) === '|><|') { i += 4; return 'join'; }
+      if (s.substr(i, 3) === '|x|' || s.substr(i, 3) === '|X|') { i += 3; return 'join'; }
+      if (BINARY_SYMBOLS[s[i]]) return BINARY_SYMBOLS[s[i++]];
+      var w = word();
+      if (w && BINARY_WORDS[w.toLowerCase()]) { i += w.length; return BINARY_WORDS[w.toLowerCase()]; }
+      i = save;
+      return null;
+    }
+
+    function level(allowed, next) {
+      var node = next();
+      for (;;) {
+        var save = i, op = binaryOp();
+        if (!op || !allowed[op]) { i = save; break; }
+        var p = param();
+        if (p !== null && op !== 'join') {
+          fail(OPS[op].symbol + ' does not take a condition');
+        }
+        node = { type: 'op', op: op, param: p || '', children: [node, next()] };
+      }
+      return node;
+    }
+
+    function expression() { return level(LOW_PRECEDENCE, term); }
+    function term() { return level(HIGH_PRECEDENCE, factor); }
+
+    function factor() {
+      ws();
+      if (i >= s.length) fail('The expression is incomplete');
+      if (s[i] === '?') { i++; return null; }              // an empty slot
+      if (s[i] === '(') {
+        i++;
+        var inner = expression();
+        ws();
+        if (s[i] !== ')') fail('Missing a closing ")"');
+        i++;
+        return inner;
+      }
+
+      var opName = UNARY_WORDS[s[i]];
+      if (opName) i++;
+      else {
+        var w = word();
+        // "Project" the relation vs "project_{...}" the operator: only the one
+        // carrying a parameter is an operator.
+        if (w && UNARY_WORDS[w.toLowerCase()]) {
+          var after = i + w.length;
+          while (after < s.length && /\s/.test(s[after])) after++;
+          if (s[after] === '_' || s[after] === '{' || s[after] === '[') {
+            opName = UNARY_WORDS[w.toLowerCase()];
+            i += w.length;
+          }
+        }
+      }
+
+      if (opName) {
+        var p = param();
+        if (p === null) {
+          fail(OPS[opName].symbol + ' must be written ' + OPS[opName].symbol +
+               '_{' + OPS[opName].paramLabel + '}(...)');
+        }
+        ws();
+        if (s[i] !== '(') fail('Expected "(" after ' + OPS[opName].symbol + '_{' + p + '}');
+        i++;
+        var child = expression();
+        ws();
+        if (s[i] !== ')') fail('Missing a closing ")"');
+        i++;
+        return { type: 'op', op: opName, param: p, children: [child] };
+      }
+
+      var name = ident();
+      if (name) { i += name.length; return { type: 'rel', name: name }; }
+      fail('Expected a relation name, an operator, or "("');
+    }
+
+    ws();
+    if (!s.trim()) return null;
+    var tree = expression();
+    ws();
+    if (i < s.length) fail('Unexpected "' + s[i] + '"');
+    return tree;
+  }
+
+  // The canonical form parseExpression round-trips; always brace-delimited.
+  function toText(node) {
+    if (!node) return '?';
+    if (node.type === 'rel') return node.name;
+    var meta = OPS[node.op];
+    var p = String(node.param || '').trim();
+    if (meta.arity === 1) {
+      var child = node.children[0];
+      var inner = toText(child);
+      // A binary child already brackets itself; don't double up.
+      var bracketed = child && child.type === 'op' && OPS[child.op].arity === 2;
+      return meta.symbol + '_{' + p + '}' + (bracketed ? inner : '(' + inner + ')');
+    }
+    return '(' + toText(node.children[0]) + ' ' + meta.symbol + (p ? '_{' + p + '}' : '') +
+           ' ' + toText(node.children[1]) + ')';
+  }
+
   /* ---------- answer checking ---------- */
 
   function permutations(n) {
@@ -530,6 +702,8 @@
     evaluate: evaluate,
     compare: compare,
     toHTML: toHTML,
+    toText: toText,
+    parseExpression: parseExpression,
     OPS: OPS,
     parseCondition: parseCondition,
     error: RAError

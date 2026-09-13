@@ -6,22 +6,28 @@
 <title>Relational Algebra Playground</title>
 <style>
 :root {
-  --bg: #0f1117;
-  --bg-raised: #171a23;
-  --bg-inset: #11141b;
-  --line: #262b38;
-  --line-soft: #1d2230;
-  --text: #e7eaf3;
-  --text-dim: #9aa3b8;
-  --text-faint: #6b7488;
-  --accent: #5eead4;
-  --accent-deep: #14b8a6;
-  --violet: #a78bfa;
-  --amber: #fbbf24;
-  --rose: #f472b6;
-  --blue: #60a5fa;
-  --good: #34d399;
-  --bad: #f87171;
+  /* Lafayette College: PMS 202 maroon #822433, with the web palette's
+     #65001C, #910029, #4EA8D8, #A2998B and #E8E6E2. On a dark ground the
+     brand maroon is too dark for text, so --accent is a tint of it and the
+     solid maroons are used as fills behind white. */
+  --maroon: #822433;
+  --maroon-deep: #65001c;
+  --bg: #15100f;
+  --bg-raised: #1f1719;
+  --bg-inset: #191314;
+  --line: #362a2d;
+  --line-soft: #281e20;
+  --text: #f2ebec;
+  --text-dim: #b9a9ac;
+  --text-faint: #8d7c80;
+  --accent: #e79aa8;
+  --accent-deep: #910029;
+  --gold: #d8a657;
+  --pale: #e8e6e2;
+  --warm: #c4b8a8;
+  --blue: #4ea8d8;
+  --good: #79c39b;
+  --bad: #e8756f;
   --radius: 10px;
   --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
@@ -30,7 +36,7 @@
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 700px at 15% -10%, #1b2130 0%, var(--bg) 55%);
+  background: radial-gradient(1200px 700px at 15% -10%, #24191c 0%, var(--bg) 55%);
   color: var(--text);
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   min-height: 100vh;
@@ -42,6 +48,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 /* ---------- top bar ---------- */
 
 .topbar {
+  border-top: 3px solid var(--maroon);
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 14px 22px; border-bottom: 1px solid var(--line);
   background: rgba(15, 17, 23, .8); backdrop-filter: blur(8px);
@@ -51,8 +58,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .brand-mark {
   width: 42px; height: 42px; display: grid; place-items: center;
   border-radius: 12px; font-size: 24px; font-family: var(--mono);
-  background: linear-gradient(145deg, var(--accent-deep), #0d9488); color: #07211d;
-  box-shadow: 0 4px 14px rgba(20, 184, 166, .3);
+  background: linear-gradient(145deg, var(--accent-deep), var(--maroon-deep)); color: #fff;
+  box-shadow: 0 4px 14px rgba(130, 36, 51, .5);
 }
 .topbar h1 { font-size: 17px; letter-spacing: .2px; }
 .tagline { margin: 1px 0 0; font-size: 12.5px; color: var(--text-dim); }
@@ -66,14 +73,14 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   padding: 7px 13px; border-radius: 8px; font-size: 13px; font-weight: 550;
   cursor: pointer; transition: background .12s, border-color .12s, transform .08s;
 }
-.btn:hover:not(:disabled) { background: #1e2331; border-color: #37405270; }
+.btn:hover:not(:disabled) { background: #292022; border-color: #4a383c70; }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: .38; cursor: not-allowed; }
 .btn-primary {
-  background: linear-gradient(145deg, var(--accent), var(--accent-deep));
-  color: #06211c; border-color: transparent; font-weight: 700;
+  background: linear-gradient(145deg, var(--accent-deep), var(--maroon));
+  color: #fff; border-color: transparent; font-weight: 700;
 }
-.btn-primary:hover:not(:disabled) { filter: brightness(1.08); background: linear-gradient(145deg, var(--accent), var(--accent-deep)); }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.14); background: linear-gradient(145deg, var(--accent-deep), var(--maroon)); }
 
 /* ---------- level pills ---------- */
 
@@ -107,8 +114,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 }
 .pill:hover { border-color: var(--accent-deep); color: var(--text); }
 .pill.current { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-.pill.solved { color: var(--good); border-color: #34d39955; }
-.pill.solved.gold { color: var(--amber); border-color: #fbbf2455; }
+.pill.solved { color: var(--good); border-color: #79c39b55; }
+.pill.solved.gold { color: var(--gold); border-color: #d8a65755; }
 /* flex-basis:100% forces each chapter onto its own row of pills */
 .pill-chapter {
   flex-basis: 100%; margin: 6px 0 -2px;
@@ -141,23 +148,23 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   border: 1px solid var(--line); background: var(--bg-inset); color: var(--text);
   transition: transform .1s, border-color .12s, background .12s;
 }
-.op-chip:hover { transform: translateY(-2px); border-color: var(--accent-deep); background: #182028; }
+.op-chip:hover { transform: translateY(-2px); border-color: var(--accent-deep); background: #251b1e; }
 .op-chip:active { cursor: grabbing; }
-.op-chip.armed { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(94, 234, 212, .22); }
+.op-chip.armed { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(231, 154, 168, .24); }
 .op-sym { font-size: 21px; line-height: 1.1; font-family: var(--mono); }
 .op-name { font-size: 10.5px; color: var(--text-dim); letter-spacing: .2px; }
 .op-badge {
-  position: absolute; top: -7px; right: -6px; background: var(--amber); color: #3b2600;
+  position: absolute; top: -7px; right: -6px; background: var(--gold); color: #2a1a06;
   font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 20px; letter-spacing: .4px;
 }
-.op-chip.is-new { border-color: #fbbf2455; }
+.op-chip.is-new { border-color: #d8a65755; }
 
 .op-project .op-sym, .node-op.op-project .node-sym { color: var(--accent); }
-.op-select .op-sym, .node-op.op-select .node-sym { color: var(--amber); }
-.op-rename .op-sym, .node-op.op-rename .node-sym { color: var(--rose); }
-.op-join .op-sym, .node-op.op-join .node-sym { color: var(--violet); }
-.op-product .op-sym, .node-op.op-product .node-sym { color: var(--violet); }
-.op-divide .op-sym, .node-op.op-divide .node-sym { color: var(--violet); }
+.op-select .op-sym, .node-op.op-select .node-sym { color: var(--gold); }
+.op-rename .op-sym, .node-op.op-rename .node-sym { color: var(--pale); }
+.op-join .op-sym, .node-op.op-join .node-sym,
+.op-product .op-sym, .node-op.op-product .node-sym,
+.op-divide .op-sym, .node-op.op-divide .node-sym { color: var(--warm); }
 .op-union .op-sym, .node-op.op-union .node-sym,
 .op-intersect .op-sym, .node-op.op-intersect .node-sym,
 .op-difference .op-sym, .node-op.op-difference .node-sym { color: var(--blue); }
@@ -168,10 +175,10 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .table-card { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--bg-inset); }
 .table-head {
   display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: grab;
-  background: #1b2130; border-bottom: 1px solid var(--line);
+  background: #241b1d; border-bottom: 1px solid var(--line);
 }
-.table-head:hover { background: #212838; }
-.table-head.armed { box-shadow: 0 0 0 2px rgba(94, 234, 212, .25) inset; }
+.table-head:hover { background: #2c2124; }
+.table-head.armed { box-shadow: 0 0 0 2px rgba(231, 154, 168, .26) inset; }
 .grip { color: var(--text-faint); font-size: 13px; }
 .rel-name { font-family: var(--mono); font-weight: 600; color: var(--accent); font-size: 13.5px; }
 .rel-meta { margin-left: auto; font-size: 11px; color: var(--text-faint); }
@@ -182,19 +189,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .rel-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
 .rel-table th {
   position: sticky; top: 0; text-align: left; padding: 6px 10px; white-space: nowrap;
-  background: #161b26; color: var(--text-dim); font-weight: 600; border-bottom: 1px solid var(--line);
+  background: #1d1618; color: var(--text-dim); font-weight: 600; border-bottom: 1px solid var(--line);
 }
 .rel-table td { padding: 5px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
 .rel-table td.num { color: var(--accent); text-align: right; font-variant-numeric: tabular-nums; }
-.rel-table tbody tr:hover td { background: #1a2030; }
+.rel-table tbody tr:hover td { background: #241a1d; }
 .rel-table .empty-row td { color: var(--text-faint); font-style: italic; text-align: center; padding: 12px; }
 .truncated { margin: 6px 10px; font-size: 11.5px; color: var(--text-faint); }
 
 /* ---------- question ---------- */
 
 .question-card {
-  background: linear-gradient(160deg, #1a2531, var(--bg-raised) 65%);
-  border: 1px solid #2a3a44; border-radius: var(--radius); padding: 16px 18px;
+  background: linear-gradient(160deg, #26191c, var(--bg-raised) 65%);
+  border: 1px solid #45262e; border-radius: var(--radius); padding: 16px 18px;
 }
 .question-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .level-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); font-weight: 700; }
@@ -202,7 +209,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .question { margin: 8px 0 0; font-size: 15.5px; }
 .tip {
   margin: 10px 0 0; padding: 9px 12px; border-left: 3px solid var(--accent-deep);
-  background: #12202080; border-radius: 0 7px 7px 0; font-size: 13px; color: var(--text-dim);
+  background: #2a161a80; border-radius: 0 7px 7px 0; font-size: 13px; color: var(--text-dim);
 }
 .tip b { color: var(--text); font-family: var(--mono); }
 
@@ -212,7 +219,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .canvas {
   min-height: 190px; padding: 20px; border-radius: 9px;
   background:
-    radial-gradient(circle at 1px 1px, #2a3142 1px, transparent 0) 0 0 / 18px 18px,
+    radial-gradient(circle at 1px 1px, #3a2b2f 1px, transparent 0) 0 0 / 18px 18px,
     var(--bg-inset);
   border: 1px solid var(--line);
   display: flex; justify-content: center; align-items: flex-start; overflow: auto;
@@ -224,8 +231,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   border-radius: 9px; border: 1px solid var(--line); background: var(--bg-raised);
   box-shadow: 0 2px 10px rgba(0, 0, 0, .28);
 }
-.node-op > .node-head { border-color: #34405a; }
-.node-rel > .node-head { border-color: var(--accent-deep); background: #10231f; }
+.node-op > .node-head { border-color: #46343a; }
+.node-rel > .node-head { border-color: var(--accent-deep); background: #241417; }
 .node-sym { font-family: var(--mono); font-size: 19px; line-height: 1; padding: 0 2px; }
 .node-rel .node-sym { font-size: 14px; font-weight: 600; color: var(--accent); }
 
@@ -234,14 +241,14 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   border-radius: 6px; padding: 4px 8px; font-family: var(--mono); font-size: 12.5px;
   min-width: 160px; width: 22ch; outline: none;
 }
-.param-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(94, 234, 212, .16); }
-.param-input::placeholder { color: #55607a; }
+.param-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(231, 154, 168, .18); }
+.param-input::placeholder { color: #6d5b5f; }
 
 .node-del {
   border: none; background: transparent; color: var(--text-faint);
   font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 4px; border-radius: 5px;
 }
-.node-del:hover { color: var(--bad); background: #2a1a1e; }
+.node-del:hover { color: var(--bad); background: #3a1a1e; }
 
 .node-kids { display: flex; gap: 18px; align-items: flex-start; position: relative; padding-top: 14px; }
 .node-kids::before {
@@ -254,15 +261,15 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
 .slot {
   min-width: 170px; padding: 13px 14px; border-radius: 9px; text-align: center;
-  border: 1.5px dashed #3a4256; color: var(--text-faint); font-size: 12.5px;
-  background: #141926; transition: all .12s;
+  border: 1.5px dashed #4d393e; color: var(--text-faint); font-size: 12.5px;
+  background: #1c1518; transition: all .12s;
 }
 .canvas.is-armed .slot, body.dragging .slot {
-  border-color: var(--accent-deep); color: var(--accent); background: #12201e; cursor: pointer;
+  border-color: var(--accent-deep); color: var(--accent); background: #251418; cursor: pointer;
 }
 .slot.drop-hover, .node.drop-hover > .node-head {
-  border-color: var(--accent) !important; background: #16302b !important;
-  box-shadow: 0 0 0 2px rgba(94, 234, 212, .25);
+  border-color: var(--accent) !important; background: #33181f !important;
+  box-shadow: 0 0 0 2px rgba(231, 154, 168, .26);
 }
 
 /* ---------- formula ---------- */
@@ -272,27 +279,42 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .formula-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .9px; color: var(--text-faint); flex-shrink: 0; }
 .formula { font-family: var(--mono); font-size: 15px; white-space: nowrap; }
 .f-op { color: var(--accent); font-size: 17px; }
-.f-sub { color: var(--amber); font-size: 11.5px; }
+.f-sub { color: var(--gold); font-size: 11.5px; }
 .f-rel { color: var(--text); font-weight: 600; }
 .f-paren { color: var(--text-faint); }
 .f-slot { color: var(--text-faint); border-bottom: 1px dashed var(--text-faint); }
+
+.expr-type { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.expr-type .formula-label { flex-shrink: 0; }
+.expr-input {
+  flex: 1; min-width: 0;
+  background: var(--bg-inset); border: 1px solid var(--line); color: var(--text);
+  border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 14px; outline: none;
+}
+.expr-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(231, 154, 168, .18); }
+.expr-input::placeholder { color: #6d5b5f; }
+.expr-error {
+  margin: 7px 0 0; padding: 7px 11px; border-radius: 7px;
+  background: #2e1417; border: 1px solid var(--bad); color: #f6d2ce;
+  font-family: var(--mono); font-size: 12.5px;
+}
 
 /* ---------- feedback ---------- */
 
 .feedback { margin-top: 10px; font-size: 13.5px; padding: 0; }
 .feedback:not(:empty) { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); }
-.feedback-good { background: #0f2a22; border-color: #34d39955 !important; color: #bbf7d0; }
-.feedback-bad { background: #2a1418; border-color: #f8717155 !important; color: #fecaca; }
-.feedback-info { background: #16202e; border-color: #60a5fa44 !important; color: #cfe3ff; }
+.feedback-good { background: #14261d; border-color: #79c39b55 !important; color: #c8e8d6; }
+.feedback-bad { background: #2e1417; border-color: #e8756f55 !important; color: #f6d2ce; }
+.feedback-info { background: #1b2530; border-color: #4ea8d844 !important; color: #cde6f4; }
 
 /* ---------- output ---------- */
 
 .output-meta { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .output { border: 1px solid var(--line); border-radius: 8px; overflow: auto; max-height: 420px; background: var(--bg-inset); }
 .output-muted, .output-error { border-style: dashed; }
-.output-error { border-color: #f8717150; }
+.output-error { border-color: #e8756f50; }
 .placeholder, .error-msg { margin: 0; padding: 16px; font-size: 13px; color: var(--text-faint); text-align: center; }
-.error-msg { color: #fca5a5; font-family: var(--mono); font-size: 12.5px; text-align: left; }
+.error-msg { color: #eda6a2; font-family: var(--mono); font-size: 12.5px; text-align: left; }
 
 /* ---------- footer + confetti ---------- */
 
@@ -378,6 +400,12 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         <span class="formula-label">Expression</span>
         <div id="formula" class="formula"></div>
       </div>
+      <div class="expr-type">
+        <label class="formula-label" for="exprInput">Type it</label>
+        <input id="exprInput" class="expr-input" type="text" spellcheck="false" autocomplete="off"
+               autocapitalize="off" placeholder="π_{ename}(σ_{salary &gt; 60000}(Employee))">
+      </div>
+      <p id="exprError" class="expr-error" hidden></p>
       <div id="feedback" class="feedback"></div>
     </section>
 
@@ -396,6 +424,16 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     <b>Conditions:</b> <code>salary &gt; 60000</code>, <code>dept = 'Sales'</code>, combine with
     <code>AND</code> / <code>OR</code> / <code>NOT</code> and parentheses. Text values need quotes.
     <b>Deleting</b> an operator promotes whatever was inside it, so you can peel a query apart layer by layer.
+  </p>
+  <p>
+    <b>Typing:</b> the <i>Type it</i> box takes standard notation —
+    <code>π_{ename}(σ_{salary &gt; 60000}(Employee))</code> — and the canvas follows along as you type.
+    No Greek keyboard needed: <code>project</code>, <code>select</code>, <code>rename</code>,
+    <code>union</code>, <code>intersect</code>, <code>minus</code>, <code>join</code>,
+    <code>product</code> and <code>divide</code> all work, as do <code>|&gt;&lt;|</code>,
+    <code>*</code>, <code>-</code> and <code>/</code>. Square brackets are accepted in place of
+    braces: <code>project[ename](Employee)</code>. A <code>?</code> stands for a slot you have not
+    filled in yet.
   </p>
 </footer>
 
@@ -861,6 +899,178 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       toHTML(kids[1]) + '<span class="f-paren">)</span>';
   }
 
+  /* ---------- typing an expression ---------- */
+
+  var UNARY_WORDS = {
+    'π': 'project', 'pi': 'project', 'project': 'project',
+    'σ': 'select', 'sigma': 'select', 'select': 'select',
+    'ρ': 'rename', 'rho': 'rename', 'rename': 'rename'
+  };
+  var BINARY_SYMBOLS = {
+    '∪': 'union', '∩': 'intersect', '−': 'difference', '-': 'difference',
+    '×': 'product', '*': 'product', '⋈': 'join', '÷': 'divide', '/': 'divide'
+  };
+  var BINARY_WORDS = {
+    'union': 'union', 'intersect': 'intersect',
+    'minus': 'difference', 'difference': 'difference', 'except': 'difference',
+    'product': 'product', 'times': 'product', 'cross': 'product',
+    'join': 'join', 'divide': 'divide'
+  };
+  var LOW_PRECEDENCE = { union: 1, intersect: 1, difference: 1 };
+  var HIGH_PRECEDENCE = { product: 1, join: 1, divide: 1 };
+  var IDENT = /^[A-Za-z_][A-Za-z0-9_]*/;
+  // Operator words are matched letters-only: "_" is a legal identifier
+  // character, so IDENT would swallow the "_" of "join_{...}".
+  var WORD = /^[A-Za-z]+/;
+
+  /* Parses standard notation into the same tree the canvas edits, so typing and
+     dragging are two views of one model. "?" stands for an unfilled slot. */
+  function parseExpression(text) {
+    var s = String(text == null ? '' : text);
+    var i = 0;
+
+    function fail(msg) { throw RAError(msg + ' (position ' + (i + 1) + ')'); }
+    function ws() { while (i < s.length && /\s/.test(s[i])) i++; }
+    function ident() { var m = IDENT.exec(s.slice(i)); return m ? m[0] : null; }
+    function word() { var m = WORD.exec(s.slice(i)); return m ? m[0] : null; }
+
+    function delimited(open, close) {
+      var depth = 0, start = ++i;
+      while (i < s.length) {
+        if (s[i] === open) depth++;
+        else if (s[i] === close) {
+          if (depth === 0) return s.slice(start, i++).trim();
+          depth--;
+        }
+        i++;
+      }
+      i = start;
+      fail('Missing a closing "' + close + '"');
+    }
+
+    // A parameter is _{...}, {...}, [...], or bare text after _ up to the "(".
+    function param() {
+      var save = i;
+      ws();
+      var underscore = s[i] === '_';
+      if (underscore) { i++; ws(); }
+      if (s[i] === '{') return delimited('{', '}');
+      if (s[i] === '[') return delimited('[', ']');
+      if (underscore) {
+        var start = i;
+        while (i < s.length && s[i] !== '(') i++;
+        var bare = s.slice(start, i).trim();
+        if (!bare) { i = save; fail('Expected a parameter after "_"'); }
+        return bare;
+      }
+      i = save;
+      return null;
+    }
+
+    function binaryOp() {
+      var save = i;
+      ws();
+      if (s.substr(i, 4) === '|><|') { i += 4; return 'join'; }
+      if (s.substr(i, 3) === '|x|' || s.substr(i, 3) === '|X|') { i += 3; return 'join'; }
+      if (BINARY_SYMBOLS[s[i]]) return BINARY_SYMBOLS[s[i++]];
+      var w = word();
+      if (w && BINARY_WORDS[w.toLowerCase()]) { i += w.length; return BINARY_WORDS[w.toLowerCase()]; }
+      i = save;
+      return null;
+    }
+
+    function level(allowed, next) {
+      var node = next();
+      for (;;) {
+        var save = i, op = binaryOp();
+        if (!op || !allowed[op]) { i = save; break; }
+        var p = param();
+        if (p !== null && op !== 'join') {
+          fail(OPS[op].symbol + ' does not take a condition');
+        }
+        node = { type: 'op', op: op, param: p || '', children: [node, next()] };
+      }
+      return node;
+    }
+
+    function expression() { return level(LOW_PRECEDENCE, term); }
+    function term() { return level(HIGH_PRECEDENCE, factor); }
+
+    function factor() {
+      ws();
+      if (i >= s.length) fail('The expression is incomplete');
+      if (s[i] === '?') { i++; return null; }              // an empty slot
+      if (s[i] === '(') {
+        i++;
+        var inner = expression();
+        ws();
+        if (s[i] !== ')') fail('Missing a closing ")"');
+        i++;
+        return inner;
+      }
+
+      var opName = UNARY_WORDS[s[i]];
+      if (opName) i++;
+      else {
+        var w = word();
+        // "Project" the relation vs "project_{...}" the operator: only the one
+        // carrying a parameter is an operator.
+        if (w && UNARY_WORDS[w.toLowerCase()]) {
+          var after = i + w.length;
+          while (after < s.length && /\s/.test(s[after])) after++;
+          if (s[after] === '_' || s[after] === '{' || s[after] === '[') {
+            opName = UNARY_WORDS[w.toLowerCase()];
+            i += w.length;
+          }
+        }
+      }
+
+      if (opName) {
+        var p = param();
+        if (p === null) {
+          fail(OPS[opName].symbol + ' must be written ' + OPS[opName].symbol +
+               '_{' + OPS[opName].paramLabel + '}(...)');
+        }
+        ws();
+        if (s[i] !== '(') fail('Expected "(" after ' + OPS[opName].symbol + '_{' + p + '}');
+        i++;
+        var child = expression();
+        ws();
+        if (s[i] !== ')') fail('Missing a closing ")"');
+        i++;
+        return { type: 'op', op: opName, param: p, children: [child] };
+      }
+
+      var name = ident();
+      if (name) { i += name.length; return { type: 'rel', name: name }; }
+      fail('Expected a relation name, an operator, or "("');
+    }
+
+    ws();
+    if (!s.trim()) return null;
+    var tree = expression();
+    ws();
+    if (i < s.length) fail('Unexpected "' + s[i] + '"');
+    return tree;
+  }
+
+  // The canonical form parseExpression round-trips; always brace-delimited.
+  function toText(node) {
+    if (!node) return '?';
+    if (node.type === 'rel') return node.name;
+    var meta = OPS[node.op];
+    var p = String(node.param || '').trim();
+    if (meta.arity === 1) {
+      var child = node.children[0];
+      var inner = toText(child);
+      // A binary child already brackets itself; don't double up.
+      var bracketed = child && child.type === 'op' && OPS[child.op].arity === 2;
+      return meta.symbol + '_{' + p + '}' + (bracketed ? inner : '(' + inner + ')');
+    }
+    return '(' + toText(node.children[0]) + ' ' + meta.symbol + (p ? '_{' + p + '}' : '') +
+           ' ' + toText(node.children[1]) + ')';
+  }
+
   /* ---------- answer checking ---------- */
 
   function permutations(n) {
@@ -933,6 +1143,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     evaluate: evaluate,
     compare: compare,
     toHTML: toHTML,
+    toText: toText,
+    parseExpression: parseExpression,
     OPS: OPS,
     parseCondition: parseCondition,
     error: RAError
@@ -1843,8 +2055,30 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     }
   }
 
+  function setExprError(msg) {
+    el.exprError.textContent = msg || '';
+    el.exprError.hidden = !msg;
+  }
+
+  // Typing edits the same tree the canvas does; whichever one you are not
+  // touching follows along.
+  function onExprInput() {
+    try {
+      state.tree = RA.parseExpression(el.exprInput.value);
+      setExprError('');
+      renderTree();
+      refreshOutput();
+    } catch (e) {
+      setExprError(e.message);
+    }
+  }
+
   function refreshOutput() {
     el.formula.innerHTML = RA.toHTML(state.tree);
+    if (document.activeElement !== el.exprInput) {
+      el.exprInput.value = state.tree ? RA.toText(state.tree) : '';
+      setExprError('');
+    }
     var res = evaluateTree();
     if (res.ok) {
       el.outputMeta.textContent = res.relation.attrs.length + ' column' +
@@ -2008,7 +2242,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     if (!ctx) return;
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
-    var colors = ['#5eead4', '#a78bfa', '#fbbf24', '#f472b6', '#60a5fa'];
+    var colors = ['#e79aa8', '#910029', '#d8a657', '#e8e6e2', '#4ea8d8'];
     var bits = [];
     for (var i = 0; i < 90; i++) {
       bits.push({
@@ -2045,7 +2279,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
   function init() {
     ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
-     'tables', 'palette', 'canvas', 'formula', 'output', 'outputMeta', 'feedback', 'confetti'
+     'tables', 'palette', 'canvas', 'formula', 'exprInput', 'exprError',
+     'output', 'outputMeta', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
     el.prev = document.getElementById('btnPrev');
@@ -2053,6 +2288,11 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     el.hint = document.getElementById('btnHint');
 
     el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
+    el.exprInput.addEventListener('input', onExprInput);
+    el.exprInput.addEventListener('blur', function () { setExprError(''); refreshOutput(); });
+    el.exprInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); check(); }
+    });
     document.getElementById('btnCheck').addEventListener('click', check);
     document.getElementById('btnClear').addEventListener('click', function () {
       state.tree = null;

@@ -37,6 +37,9 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
   every keystroke, including a plain-English error when the query does not typecheck.
 - **Check answer** compares your result to the expected relation. Column order does not matter
   (relations are unordered sets of attributes); the rename level additionally checks column names.
+- **Type it instead, if you prefer.** The *Type it* box under the canvas accepts standard notation,
+  and the two stay in sync: typing rebuilds the tree, dragging rewrites the text. See
+  [Typing expressions](#typing-expressions).
 - **Every level is open from the start.** Nothing has to be unlocked — click any level in the bar at
   the top and go straight to it. Collapse that bar with the **Levels** header when you want the room;
   it remembers whether you left it open.
@@ -58,6 +61,41 @@ Twenty-five puzzles in five chapters:
 The advanced chapter is where relational algebra stops being a notation for SQL and starts being a
 logic: with no aggregation and no counting, `MAX` becomes "nobody beats me", `only` becomes "has no
 counterexample", and `for all` becomes either ÷ or a difference of two differences.
+
+## Typing expressions
+
+Anything you can drag, you can type — the text box and the canvas edit one tree, so switching
+between them mid-query is fine. Unfilled slots show up as `?`.
+
+    π_{ename}(σ_{salary > 60000}(Employee))
+    π_{ename, pname}((Employee ⋈ WorksOn) ⋈ Project)
+    Department ⋈_{head = eid} Employee
+
+Every operator has an ASCII spelling, so no Greek keyboard is needed:
+
+| Operator | Symbol | Also accepted |
+| --- | --- | --- |
+| project | `π` | `project`, `pi` |
+| select | `σ` | `select`, `sigma` |
+| rename | `ρ` | `rename`, `rho` |
+| union | `∪` | `union` |
+| intersect | `∩` | `intersect` |
+| difference | `−` | `-`, `minus`, `difference`, `except` |
+| product | `×` | `*`, `product`, `times`, `cross` |
+| join | `⋈` | `join`, `\|><\|`, `\|x\|` |
+| divide | `÷` | `/`, `divide` |
+
+Parameters go in `_{...}`, `{...}` or `[...]`; the bare form `π_ename(R)` works too, but a condition
+containing parentheses needs the braces. Binary operators bind tighter for `× ⋈ ÷` than for
+`∪ ∩ −`, and everything is left-associative — the canvas always shows exactly how your text was
+grouped, which is the quickest way to check you meant what you wrote.
+
+## Colors
+
+The interface uses Lafayette College's palette: PMS 202 maroon `#822433` with the web palette's
+`#65001C`, `#910029`, light blue `#4EA8D8`, warm gray `#A2998B` and pale gray `#E8E6E2`. On the dark
+ground the brand maroon is too dark to read as text, so `--accent` is a tint of it and the solid
+maroons are used as fills behind white. All of it lives in the `:root` block of `src/styles.css`.
 
 ## Conditions
 

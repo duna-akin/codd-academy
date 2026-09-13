@@ -75,6 +75,12 @@
         <span class="formula-label">Expression</span>
         <div id="formula" class="formula"></div>
       </div>
+      <div class="expr-type">
+        <label class="formula-label" for="exprInput">Type it</label>
+        <input id="exprInput" class="expr-input" type="text" spellcheck="false" autocomplete="off"
+               autocapitalize="off" placeholder="π_{ename}(σ_{salary &gt; 60000}(Employee))">
+      </div>
+      <p id="exprError" class="expr-error" hidden></p>
       <div id="feedback" class="feedback"></div>
     </section>
 
@@ -93,6 +99,16 @@
     <b>Conditions:</b> <code>salary &gt; 60000</code>, <code>dept = 'Sales'</code>, combine with
     <code>AND</code> / <code>OR</code> / <code>NOT</code> and parentheses. Text values need quotes.
     <b>Deleting</b> an operator promotes whatever was inside it, so you can peel a query apart layer by layer.
+  </p>
+  <p>
+    <b>Typing:</b> the <i>Type it</i> box takes standard notation —
+    <code>π_{ename}(σ_{salary &gt; 60000}(Employee))</code> — and the canvas follows along as you type.
+    No Greek keyboard needed: <code>project</code>, <code>select</code>, <code>rename</code>,
+    <code>union</code>, <code>intersect</code>, <code>minus</code>, <code>join</code>,
+    <code>product</code> and <code>divide</code> all work, as do <code>|&gt;&lt;|</code>,
+    <code>*</code>, <code>-</code> and <code>/</code>. Square brackets are accepted in place of
+    braces: <code>project[ename](Employee)</code>. A <code>?</code> stands for a slot you have not
+    filled in yet.
   </p>
 </footer>
 

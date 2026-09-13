@@ -83,6 +83,41 @@ JSDOM.fromFile(path, {
   click($('#btnHint'));
   console.log('hint  :', text('#feedback').trim().slice(0, 70));
 
+  // 5. Typing the expression instead of dragging it.
+  click(doc.querySelectorAll('.pill')[1]);          // level 2: Just the names
+  const expr = $('#exprInput');
+  expr.focus();
+  expr.value = 'project_{ename}(Employee)';         // ASCII form, no Greek keyboard
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  console.log('typed :', 'canvas nodes =', doc.querySelectorAll('.node').length,
+              '| rendered =', text('#formula').trim(),
+              '| result cols =', doc.querySelectorAll('#output thead th').length);
+  if (doc.querySelectorAll('.node').length < 2) errors.push('typing did not build the canvas tree');
+  click($('#btnCheck'));
+  console.log('check2:', text('#feedback').trim());
+  if (!/Correct/.test(text('#feedback'))) errors.push('a typed answer was not accepted');
+
+  // Bad syntax explains itself and leaves the canvas standing.
+  const before = doc.querySelectorAll('.node').length;
+  expr.value = 'project_{ename}(Employee';
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  console.log('synerr:', text('#exprError').trim(), '| canvas kept =',
+              doc.querySelectorAll('.node').length === before);
+  if ($('#exprError').hidden || doc.querySelectorAll('.node').length !== before) {
+    errors.push('a syntax error should be reported without destroying the canvas');
+  }
+
+  // ...and dragging writes back into the text box.
+  expr.blur();
+  click($('#btnClear'));
+  drop(doc.querySelector('.slot'), { kind: 'rel', value: 'Employee' });
+  drop(doc.querySelector('.node'), { kind: 'op', value: 'project' });
+  console.log('sync  :', 'canvas -> text =', JSON.stringify(expr.value));
+  if (expr.value !== 'π_{}(Employee)') errors.push('canvas edits did not reach the text box');
+
+  // The walk below assumes it starts at level 1.
+  click(doc.querySelectorAll('.pill')[0]);
+
   let failed = 0;
   for (let i = 0; i < LEVELS.length; i++) {
     click($('#btnClear'));
