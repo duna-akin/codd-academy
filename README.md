@@ -48,7 +48,7 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
 
 ## The levels
 
-Twenty-five puzzles in five chapters:
+Thirty-seven puzzles in six chapters:
 
 | Chapter | Levels | What it teaches |
 | --- | --- | --- |
@@ -58,7 +58,7 @@ Twenty-five puzzles in five chapters:
 | Products and division | 14–16 | ρ + × to compare a relation with itself, ÷ for "for all" |
 | Advanced | 17–25 | theta joins, self-joins for "at least two" and "exactly one", max without aggregation, "only", division by a derived relation, universal quantification by double negation |
 
-| Aggregation | 26–32 | `ℱ` with and without grouping, several functions at once, filtering groups (SQL's HAVING), aggregating a join |
+| Aggregation | 26–37 | `ℱ` with and without grouping, several functions at once, WHERE vs HAVING, aggregating a join, and joining a grouped result back to find *which* row hit the maximum |
 
 The advanced chapter is where relational algebra stops being a notation for SQL and starts being a
 logic: with no aggregation and no counting, `MAX` becomes "nobody beats me", `only` becomes "has no
@@ -157,7 +157,7 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     src/index.template.html  markup, with placeholders for the inlined CSS and JS
     src/styles.css           all styling
     src/engine.js            relational algebra engine: relations, operators, condition parser, checking
-    src/levels.js            the two databases and the 25 puzzles (each solution is an expression tree)
+    src/levels.js            the two databases and the 37 puzzles (each solution is an expression tree)
     src/app.js               UI: drag and drop, tree editing, live evaluation, progress
     test/smoke.js            end-to-end test that drives the real UI in jsdom
 
@@ -167,7 +167,7 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     npm test         # builds, then drives the built index.html
 
 The smoke test boots the page, places nodes by click and by drop, checks a wrong answer and a
-broken condition, then solves all 25 levels through the UI and asserts there are no console errors.
+broken condition, then solves all 37 levels through the UI and asserts there are no console errors.
 Point it at any copy of the built file to prove that copy stands alone:
 
     node test/smoke.js /some/other/place/index.html

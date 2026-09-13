@@ -93,7 +93,8 @@
       tip: 'A bare relation is already a valid query. Drag <b>Employee</b> onto the canvas.',
       hints: [
         'You do not need an operator at all for this one.',
-        'Relations live in the left panel — drag the Employee chip into the empty slot.'
+        'Relations live in the left panel — drag the Employee chip into the empty slot.',
+        'Or type it: put Employee in the <i>Type it</i> box under the canvas.'
       ],
       solution: rel('Employee')
     },
@@ -381,8 +382,8 @@
       title: 'At least two',
       question: 'Return the ids of employees who work on at least two different projects.',
       focus: [],
-      tip: 'Counting is not an operator here. To say "two different", pair WorksOn with itself and ' +
-           'demand the two project ids differ.',
+      tip: 'The basic algebra cannot count — ℱ only arrives in the Aggregation chapter. To say ' +
+           '"two different" without it, pair WorksOn with itself and demand the two project ids differ.',
       hints: [
         'Rename WorksOn to A and B, take the product, and keep rows where A.eid = B.eid.',
         'A.pid < B.pid makes the two projects different and stops each pair being found twice.',
@@ -402,10 +403,11 @@
       title: 'Exactly one',
       question: 'Return the ids of employees who work on exactly one project.',
       focus: [],
-      tip: 'Exactly one = at least one, minus at least two. You built the second half last level.',
+      tip: 'Exactly one = at least one, minus at least two. You built the second half in ' +
+           '<i>At least two</i>.',
       hints: [
         'The left side is simply π<sub>eid</sub>(WorksOn) — everyone with at least one project.',
-        'The right side is the whole "at least two" query from the previous level.',
+        'The right side is the whole query from <i>At least two</i>.',
         'π<sub>eid</sub>(WorksOn) − π<sub>A.eid</sub>(σ<sub>A.eid = B.eid AND A.pid &lt; B.pid</sub>' +
           '(ρ<sub>A</sub>(WorksOn) × ρ<sub>B</sub>(WorksOn)))'
       ],
@@ -424,10 +426,11 @@
     {
       db: 'company',
       title: 'The biggest one',
-      question: 'Return the id of the highest-paid employee — without any aggregation.',
+      question: 'Return the id of the highest-paid employee, without using aggregation.',
       focus: [],
-      tip: 'Relational algebra has no MAX. The trick: the maximum is the one nobody beats. ' +
-           'Find everyone who <i>is</i> beaten, then subtract them from everyone.',
+      tip: 'The basic algebra has no MAX — ℱ adds one later, but this trick is the reason the ' +
+           'algebra does not need it. The maximum is the one nobody beats: find everyone who ' +
+           '<i>is</i> beaten, then subtract them from everyone.',
       hints: [
         'Pair Employee with itself as A and B, and keep rows where A.salary < B.salary. ' +
           'Those A values are the losers.',
@@ -595,7 +598,7 @@
            '<code>COUNT_eid</code>. Once it is a column like any other, σ can filter on it — ' +
            'this is what SQL calls HAVING.',
       hints: [
-        'First build the per-department counts, exactly as you did two levels ago.',
+        'First build the per-department counts, exactly as you did in <i>How many each?</i>.',
         'Then wrap that in σ with the condition COUNT_eid > 2, and project the department.',
         'π<sub>dept</sub>(σ<sub>COUNT_eid &gt; 2</sub>(<sub>dept</sub>ℱ<sub>COUNT(eid)</sub>(Employee)))'
       ],
@@ -620,11 +623,11 @@
     },
     {
       db: 'school',
-      title: 'Final exam',
+      title: 'Enrolment counts',
       question: 'Return each course title together with the number of students enrolled in it.',
       focus: [],
       tip: 'Count first, then join to get the titles. A course nobody is enrolled in has no rows ' +
-           'to group, so it will not appear at all — which is exactly what level 18 was about.',
+           'to group, so it will not appear at all — which is what <i>Nobody signed up</i> was about.',
       hints: [
         'Group Enrolled by cid and COUNT the students.',
         'That gives you cid and COUNT_sid; join it to Course to reach the titles.',
@@ -632,6 +635,91 @@
       ],
       solution: op('project', 'title, COUNT_sid', [
         op('join', '', [rel('Course'), op('group', 'COUNT(sid)', [rel('Enrolled')], 'cid')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Two numbers at once',
+      question: 'Return, for each department, how many employees it has and what they earn on average.',
+      focus: [],
+      tip: 'Grouping and several functions combine freely: everything left of the ℱ groups, ' +
+           'everything right of it is computed per group.',
+      hints: [
+        'One ℱ does all of it — no need for two queries joined together.',
+        '<sub>dept</sub>ℱ<sub>COUNT(eid), AVG(salary)</sub>(Employee)'
+      ],
+      solution: op('group', 'COUNT(eid), AVG(salary)', [rel('Employee')], 'dept')
+    },
+    {
+      db: 'company',
+      title: 'Before or after',
+      question: 'Return the average salary of the under-40s in each department.',
+      focus: [],
+      tip: 'Where you put the σ decides what it means. <b>Before</b> the ℱ it throws away rows ' +
+           'before they are counted — SQL calls that WHERE. <b>After</b> the ℱ it throws away whole ' +
+           'groups — that is HAVING, which you did in <i>Filtering the groups</i>.',
+      hints: [
+        'Filter Employee down to the under-40s first, then group what is left.',
+        'The σ goes inside the ℱ, not around it.',
+        '<sub>dept</sub>ℱ<sub>AVG(salary)</sub>(σ<sub>age &lt; 40</sub>(Employee))'
+      ],
+      solution: op('group', 'AVG(salary)', [
+        op('select', 'age < 40', [rel('Employee')])
+      ], 'dept')
+    },
+    {
+      db: 'company',
+      title: 'Busy people',
+      question: 'Return the names of employees billed for more than 20 hours in total across all ' +
+               'their projects.',
+      focus: [],
+      tip: 'Join, then group, then filter the groups, then project — the order you say it in ' +
+           'English is the order you build it in, from the inside out.',
+      hints: [
+        'Join Employee to WorksOn, then group by ename and SUM the hours.',
+        'The summed column is called SUM_hours; filter on it with σ.',
+        'π<sub>ename</sub>(σ<sub>SUM_hours &gt; 20</sub>(<sub>ename</sub>ℱ<sub>SUM(hours)</sub>(Employee ⋈ WorksOn)))'
+      ],
+      solution: op('project', 'ename', [
+        op('select', 'SUM_hours > 20', [
+          op('group', 'SUM(hours)', [op('join', '', [rel('Employee'), rel('WorksOn')])], 'ename')
+        ])
+      ])
+    },
+    {
+      db: 'school',
+      title: 'Course load',
+      question: 'Return each student’s name together with the number of courses they are enrolled in.',
+      focus: [],
+      tip: 'The mirror image of <i>Enrolment counts</i>: group the same relation the other way round.',
+      hints: [
+        'Group Enrolled by sid and COUNT the courses.',
+        'Join that back to Student to turn the ids into names.',
+        'π<sub>sname, COUNT_cid</sub>(Student ⋈ (<sub>sid</sub>ℱ<sub>COUNT(cid)</sub>(Enrolled)))'
+      ],
+      solution: op('project', 'sname, COUNT_cid', [
+        op('join', '', [rel('Student'), op('group', 'COUNT(cid)', [rel('Enrolled')], 'sid')])
+      ])
+    },
+    {
+      db: 'company',
+      title: 'Final exam',
+      question: 'Return each department together with the name of its highest-paid employee.',
+      focus: [],
+      tip: 'ℱ can tell you the maximum salary per department, but not <i>who</i> earns it — a ' +
+           'group is not a row. Rename the result so its columns match Employee’s, and a natural ' +
+           'join will find the people again.',
+      hints: [
+        'Start with the maximum salary in each department: <sub>dept</sub>ℱ<sub>MAX(salary)</sub>(Employee).',
+        'That gives columns dept and MAX_salary. Rename them to dept and salary with ρ<sub>(dept, salary)</sub>.',
+        'Now a natural join with Employee matches on both columns at once, keeping only the top earners.',
+        'π<sub>dept, ename</sub>(Employee ⋈ ρ<sub>(dept, salary)</sub>(<sub>dept</sub>ℱ<sub>MAX(salary)</sub>(Employee)))'
+      ],
+      solution: op('project', 'dept, ename', [
+        op('join', '', [
+          rel('Employee'),
+          op('rename', '(dept, salary)', [op('group', 'MAX(salary)', [rel('Employee')], 'dept')])
+        ])
       ])
     }
   ];
