@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const src = f => fs.readFileSync(path.join(__dirname, 'src', f), 'utf8');
-const scripts = ['engine.js', 'levels.js', 'app.js'];
+const scripts = ['engine.js', 'sql.js', 'levels.js', 'app.js'];
 
 const css = src('styles.css');
 const js = scripts.map(f => '/* ===== src/' + f + ' ===== */\n' + src(f)).join('\n\n');

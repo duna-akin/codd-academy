@@ -798,20 +798,39 @@
     return out;
   }
 
-  function rowSet(rel, order) {
-    var set = Object.create(null);
-    rel.rows.forEach(function (row) {
-      set[JSON.stringify(order.map(function (i) {
+  function rowKeys(rel, order) {
+    return rel.rows.map(function (row) {
+      return JSON.stringify(order.map(function (i) {
         var v = row[rel.attrs[i]];
+        if (v === null || v === undefined) return 'null';
         return typeof v === 'number' ? 'n:' + v : 's:' + v;
-      }))] = true;
+      }));
     });
-    return set;
+  }
+
+  function counts(keys) {
+    var out = Object.create(null);
+    keys.forEach(function (k) { out[k] = (out[k] || 0) + 1; });
+    return out;
   }
 
   function sameKeys(a, b) {
     var ka = Object.keys(a), kb = Object.keys(b);
     return ka.length === kb.length && ka.every(function (k) { return k in b; });
+  }
+
+  function sameCounts(a, b) {
+    return sameKeys(a, b) && Object.keys(a).every(function (k) { return a[k] === b[k]; });
+  }
+
+  /* Three strictnesses, because the two languages disagree about what a table
+     is: the algebra has an unordered set of rows, SQL a list that may repeat. */
+  function rowsMatch(actual, expected, options) {
+    if (options.ordered) {
+      return actual.length === expected.length && actual.every(function (k, i) { return k === expected[i]; });
+    }
+    if (options.multiset) return sameCounts(counts(actual), counts(expected));
+    return sameKeys(counts(actual), counts(expected));
   }
 
   /* Relations are unordered sets of attributes, so any column permutation that
@@ -823,29 +842,42 @@
       return { ok: false, reason: 'arity',
         message: 'Your result has ' + actual.attrs.length + ' column(s); the answer needs ' + expected.attrs.length + '.' };
     }
+    var identity = expected.attrs.map(function (_, i) { return i; });
+    var target = rowKeys(expected, identity);
+
     if (options.checkNames) {
       if (!sameAttrSet(actual.attrs, expected.attrs)) {
         return { ok: false, reason: 'names',
           message: 'The columns should be named ' + expected.attrs.join(', ') + ' — yours are ' + actual.attrs.join(', ') + '.' };
       }
       var order = expected.attrs.map(function (a) { return actual.attrs.indexOf(a); });
-      var identity = expected.attrs.map(function (_, i) { return i; });
-      if (sameKeys(rowSet(actual, order), rowSet(expected, identity))) return { ok: true };
-      return { ok: false, reason: 'rows', message: rowMessage(actual, expected) };
+      if (rowsMatch(rowKeys(actual, order), target, options)) return { ok: true };
+      return { ok: false, reason: 'rows', message: rowMessage(actual, expected, rowKeys(actual, order), target, options) };
     }
-    var target = rowSet(expected, expected.attrs.map(function (_, i) { return i; }));
-    var perms = permutations(Math.min(actual.attrs.length, 6));
-    if (actual.attrs.length <= 6) {
-      for (var i = 0; i < perms.length; i++) {
-        if (sameKeys(rowSet(actual, perms[i]), target)) return { ok: true };
-      }
-    } else if (sameKeys(rowSet(actual, actual.attrs.map(function (_, k) { return k; })), target)) {
-      return { ok: true };
+
+    var perms = actual.attrs.length <= 6 ? permutations(actual.attrs.length) : [identity];
+    var best = null;
+    for (var i = 0; i < perms.length; i++) {
+      var keys = rowKeys(actual, perms[i]);
+      if (rowsMatch(keys, target, options)) return { ok: true };
+      // Keep the most promising near-miss to explain: same rows, wrong shape.
+      if (!best || (sameKeys(counts(keys), counts(target)) && !sameKeys(counts(best), counts(target)))) best = keys;
     }
-    return { ok: false, reason: 'rows', message: rowMessage(actual, expected) };
+    return { ok: false, reason: 'rows', message: rowMessage(actual, expected, best || [], target, options) };
   }
 
-  function rowMessage(actual, expected) {
+  function rowMessage(actual, expected, actualKeys, expectedKeys, options) {
+    var same = sameKeys(counts(actualKeys), counts(expectedKeys));
+    if (same && options.multiset && !sameCounts(counts(actualKeys), counts(expectedKeys))) {
+      return actualKeys.length > expectedKeys.length
+        ? 'The right rows, but ' + actualKeys.length + ' of them where the answer has ' + expectedKeys.length +
+          ' — some rows repeat. Did you mean SELECT DISTINCT?'
+        : 'The right rows, but ' + actualKeys.length + ' of them where the answer has ' + expectedKeys.length +
+          ' — the answer keeps its duplicates, so DISTINCT is one too many.';
+    }
+    if (same && options.ordered) {
+      return 'The right rows, but not in the right order — check the ORDER BY.';
+    }
     if (actual.rows.length !== expected.rows.length) {
       return 'Your result has ' + actual.rows.length + ' row(s); the answer has ' + expected.rows.length + '.';
     }
