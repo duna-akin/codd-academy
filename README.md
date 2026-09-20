@@ -4,10 +4,14 @@
 
 <sub>Solving the division puzzle: every student who has taken every CS course.</sub>
 
-An interactive game for learning relational algebra. You are shown a set of relations and asked a
-question in English; you answer by dragging operator symbols (π, σ, ρ, ∪, ∩, −, ×, ⋈, ÷) onto a
-canvas to build a query tree. The query is evaluated for real against the data as you build it, and
-checked against the expected answer.
+An interactive game for learning relational algebra **and SQL**. You are shown a set of relations and
+asked a question in English; you answer either by dragging operator symbols (π, σ, ρ, ∪, ∩, −, ×, ⋈,
+÷) onto a canvas to build a query tree, or by writing the query in SQL. The query is evaluated for
+real against the data as you type, and checked against the expected answer.
+
+Most questions can be answered in either language, and the switch above the canvas changes the
+language without changing the question — *answer this same thing the other way* is the exercise the
+two halves of a database course exist to set up.
 
 ## Running it
 
@@ -40,6 +44,9 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
 - **Type it instead, if you prefer.** The *Type it* box under the canvas accepts standard notation,
   and the two stay in sync: typing rebuilds the tree, dragging rewrites the text. See
   [Typing expressions](#typing-expressions).
+- **Or answer in SQL.** The **Algebra / SQL** switch above the canvas swaps the editor: the operator
+  palette becomes a palette of clauses, and you write a query instead of building a tree. Progress is
+  kept per language, so every level can be earned twice. See [SQL](#sql).
 - **Hide the result to work blind.** The live result table is a fine teaching aid and a bad crutch,
   so the **Result** header collapses it. Errors stay visible while it is hidden — whether a query is
   *valid* is not the same as what its answer is — but the table and the row count go away, and
@@ -52,21 +59,24 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
 
 ## The levels
 
-Thirty-seven puzzles in six chapters:
+Forty-three puzzles in seven chapters. Levels 1–37 can be answered in either language; 38–43 are SQL
+only, because the algebra has no way to ask them.
 
 | Chapter | Levels | What it teaches |
 | --- | --- | --- |
-| Basics | 1–6 | a bare relation, π, σ, compound conditions |
-| Set operations | 7–10 | ρ, ∪, −, ∩ and union compatibility |
-| Joins | 11–13 | natural joins across three relations, filtering around them |
-| Products and division | 14–16 | ρ + × to compare a relation with itself, ÷ for "for all" |
+| Basics | 1–6 | a bare relation, π, σ, compound conditions — `SELECT`, `FROM`, `WHERE` |
+| Set operations | 7–10 | ρ, ∪, −, ∩ and union compatibility — `AS`, `UNION`, `EXCEPT`, `INTERSECT` |
+| Joins | 11–13 | natural joins across three relations, filtering around them, and the first level where SQL needs a `DISTINCT` the algebra did not |
+| Products and division | 14–16 | ρ + × to compare a relation with itself, ÷ for "for all" — and the `NOT EXISTS` inside a `NOT EXISTS` that SQL uses instead |
 | Advanced | 17–25 | theta joins, self-joins for "at least two" and "exactly one", max without aggregation, "only", division by a derived relation, universal quantification by double negation |
-
 | Aggregation | 26–37 | `ℱ` with and without grouping, several functions at once, WHERE vs HAVING, aggregating a join, and joining a grouped result back to find *which* row hit the maximum |
+| SQL only | 38–43 | duplicate rows, `ORDER BY`, `LIMIT`, computed columns, `COUNT(DISTINCT …)` |
 
 The advanced chapter is where relational algebra stops being a notation for SQL and starts being a
 logic: with no aggregation and no counting, `MAX` becomes "nobody beats me", `only` becomes "has no
-counterexample", and `for all` becomes either ÷ or a difference of two differences.
+counterexample", and `for all` becomes either ÷ or a difference of two differences. Those levels are
+worth doing in both languages, because SQL's shortcut and the logic underneath it are two different
+lessons — the hints offer both, and either answer is accepted.
 
 ## Typing expressions
 
@@ -121,6 +131,54 @@ containing parentheses needs the braces. Binary operators bind tighter for `× �
 `∪ ∩ −`, and everything is left-associative — the canvas always shows exactly how your text was
 grouped, which is the quickest way to check you meant what you wrote.
 
+## SQL
+
+The **SQL** half of the switch replaces the canvas with a query editor and the operator palette with
+the clauses. The question does not change; only the language you answer it in does. Your answer is
+checked by running it, so *any* query that returns the right table is right — there is no expected
+text to match.
+
+Two things are checked more strictly than in the algebra, because they are the two things SQL has
+that a relation does not:
+
+- **Duplicate rows count.** `SELECT sname FROM Student NATURAL JOIN Enrolled WHERE grade = 'A'`
+  returns Nia twice, and the game says so: *the right rows, but 4 of them where the answer has 3 —
+  some rows repeat. Did you mean SELECT DISTINCT?*
+- **Row order counts, on the levels that ask for it.** Level 39 onwards check the rows in the order
+  you return them, so an `ORDER BY` that sorts the wrong way is wrong.
+
+Supported: `SELECT` / `DISTINCT`, `FROM` with aliases, `JOIN … ON`, `JOIN … USING`, `NATURAL JOIN`,
+`CROSS JOIN` and the comma join, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY … ASC/DESC`, `LIMIT` /
+`OFFSET`, `UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT`, subqueries in `FROM`, and subqueries in a
+condition with `IN`, `NOT IN`, `EXISTS`, `NOT EXISTS` or as a single value — correlated to the outer
+query or not. Conditions also take `BETWEEN`, `LIKE` (with `%` and `_`) and arithmetic. The aggregate
+functions are `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, plus `COUNT(*)` and `COUNT(DISTINCT x)`.
+
+Outer joins and `NULL` are deliberately absent: every join here is an inner join, and saying so
+plainly beats a half-implemented three-valued logic.
+
+<kbd>Tab</kbd> completes clauses, table names and column names the same way it does in the *Type it*
+box. Since a query is several lines, <kbd>Enter</kbd> is a newline and
+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> checks your answer.
+
+### The same query in SQL
+
+Under the canvas, **The same query in SQL** writes out whatever tree you have built as a SQL query —
+`π_{ename}(σ_{salary > 60000}(Employee))` becomes
+
+```sql
+SELECT DISTINCT ename
+FROM Employee
+WHERE salary > 60000
+```
+
+It translates one way only, and it is honest: before showing anything the game runs the SQL it just
+wrote and compares it with the algebra's own answer, so a translation that disagreed would be
+suppressed rather than shown. Every level's solution is checked this way by `npm test`.
+
+**Write it in SQL ›** carries the translation into the SQL editor. That counts as help, so the level
+is marked ✓ rather than ★ — you did the thinking in the other language.
+
 ## Colors
 
 The interface uses Lafayette College's palette: PMS 202 maroon `#822433` with the web palette's
@@ -161,18 +219,26 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     src/index.template.html  markup, with placeholders for the inlined CSS and JS
     src/styles.css           all styling
     src/engine.js            relational algebra engine: relations, operators, condition parser, checking
-    src/levels.js            the two databases and the 37 puzzles (each solution is an expression tree)
-    src/app.js               UI: drag and drop, tree editing, live evaluation, progress
+    src/sql.js               SQL engine over the same relations, and the algebra → SQL translation
+    src/levels.js            the two databases and the 43 puzzles (each with an algebra and/or a SQL answer)
+    src/app.js               UI: drag and drop, tree editing, the SQL editor, live evaluation, progress
+    test/sql.js              unit test for the SQL engine and every level's two answers
     test/smoke.js            end-to-end test that drives the real UI in jsdom
 
 ## Tests
 
     npm install      # jsdom, for the smoke test only — the game itself has no dependencies
-    npm test         # builds, then drives the built index.html
+    npm test         # builds, runs the SQL unit test, then drives the built index.html
 
-The smoke test boots the page, places nodes by click and by drop, checks a wrong answer and a
-broken condition, then solves all 37 levels through the UI and asserts there are no console errors.
-Point it at any copy of the built file to prove that copy stands alone:
+`test/sql.js` runs the SQL engine against a battery of queries and error messages, renders all 37
+algebra solutions as SQL and checks each one still returns the same table, and checks every level's
+SQL answer against its algebra twin row for row — so a level can never mean two different things in
+its two languages.
+
+The smoke test boots the page, places nodes by click and by drop, checks a wrong answer and a broken
+condition, exercises tab completion in both editors, then solves every level through the UI in every
+language it can be asked in — 37 in the algebra and 43 in SQL — and asserts there are no console
+errors. Point it at any copy of the built file to prove that copy stands alone:
 
     node test/smoke.js /some/other/place/index.html
 
@@ -191,9 +257,20 @@ Append to `LEVELS` in `src/levels.js`, then `npm run build`. Solutions are expre
   tip: 'Shown under the question.',
   hints: ['Revealed one at a time.'],
   checkNames: true,                // optional: require exact column names
-  solution: op('project', 'ename', [op('select', 'salary > 60000', [rel('Employee')])])
+  solution: op('project', 'ename', [op('select', 'salary > 60000', [rel('Employee')])]),
+  sql: {
+    tip: 'The same level told in SQL; question: overrides the English too, if it has to.',
+    focus: ['WHERE'],              // marks the clause "new" in the palette
+    ordered: true,                 // optional: check the rows in the order they come back
+    hints: ['Its own hints.'],
+    solution: 'SELECT ename\n' +
+              'FROM Employee\n' +
+              'WHERE salary > 60000'
+  }
 }
 ```
 
-The expected answer is computed by running that tree through the engine, so a level can never drift
-out of sync with its own solution.
+Both expected answers are computed by running the stored solutions, so a level can never drift out
+of sync with its own answer. Leave out `sql` and the level is algebra-only; leave out `solution` and
+it is SQL-only, and then `raNote:` explains to the reader why (`sqlNote:` does the same the other way
+round). `npm test` will tell you if the two answers disagree.
