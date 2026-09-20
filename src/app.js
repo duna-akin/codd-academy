@@ -18,7 +18,8 @@
     armed: null,         // {kind:'op'|'rel', value:string} for click-to-place
     barOpen: true,       // is the level bar expanded?
     resultOpen: true,    // show the live result, or work blind?
-    peekOpen: false      // show the algebra query rendered as SQL?
+    peekOpen: false,     // show the algebra query rendered as SQL?
+    carried: {}          // what each editor was last handed by the other one
   };
 
   var el = {};
@@ -735,7 +736,69 @@
     el.output.innerHTML = '<p class="placeholder">' + html + '</p>';
   }
 
-  /* ---------- the algebra, written out as SQL ---------- */
+  /* ---------- one query, two languages ---------- */
+
+  /* Both translations are checked before they are handed over: the game runs
+     what it just wrote and compares it with the original's answer, so a
+     translation that quietly disagreed is never shown. */
+  function algebraAsSQL() {
+    var db = currentDB(), expected;
+    try {
+      expected = RA.evaluate(state.tree, db);
+    } catch (e) {
+      return e.message === 'incomplete'
+        ? { incomplete: true, reason: 'Finish the query and the SQL for it appears here.' }
+        : { reason: 'The query has to run before it can be translated.' };
+    }
+    var text = SQL.fromTree(state.tree, db);
+    try {
+      if (!text || !RA.compare(SQL.run(text, db), expected, {}).ok) text = null;
+    } catch (e) { text = null; }
+    return text ? { text: text } : { reason: 'This one has no tidy SQL translation.' };
+  }
+
+  function sqlAsAlgebra() {
+    try {
+      return { tree: SQL.toTree(state.sql, currentDB()) };
+    } catch (e) {
+      // Half-typed SQL is not a lesson; "the algebra cannot say this" is.
+      return e.noAlgebra ? { reason: e.message } : {};
+    }
+  }
+
+  function treeText() { return state.tree ? RA.toText(state.tree) : ''; }
+
+  // The two editors are already the same query if neither has been touched
+  // since the last translation.
+  function inSync() {
+    return state.carried.sql === state.sql && state.carried.ra === treeText();
+  }
+
+  function markSynced() {
+    state.carried = { sql: state.sql, ra: treeText() };
+  }
+
+  /* Switching language brings your query with you — unless the other editor
+     holds something you wrote yourself, which is never overwritten. */
+  function carryOver(target) {
+    if (inSync()) return null;
+    if (target === 'sql') {
+      if (!state.tree) return null;
+      if (state.sql.trim() && state.sql !== state.carried.sql) return { stale: true };
+      var out = algebraAsSQL();
+      if (!out.text) return out.incomplete ? null : { reason: out.reason };
+      state.sql = out.text;
+      markSynced();
+      return { carried: true };
+    }
+    if (!state.sql.trim()) return null;
+    if (treeText() && treeText() !== state.carried.ra) return { stale: true };
+    var got = sqlAsAlgebra();
+    if (!got.tree) return got.reason ? { reason: got.reason } : null;
+    state.tree = got.tree;
+    markSynced();
+    return { carried: true };
+  }
 
   var lastPeek = null;
   var KEYWORD_RE = new RegExp('\\b(' + SQL.KEYWORDS.join('|') + ')\\b', 'g');
@@ -757,21 +820,13 @@
     if (!state.peekOpen) return;
     el.peek.hidden = false;
 
-    var text = null, note = null;
-    try {
-      var expected = RA.evaluate(state.tree, currentDB());
-      text = SQL.fromTree(state.tree, currentDB());
-      if (text && !RA.compare(SQL.run(text, currentDB()), expected, {}).ok) text = null;
-      if (!text) note = 'This one has no tidy SQL translation.';
-    } catch (e) {
-      note = e.message === 'incomplete'
-        ? 'Finish the query and the SQL for it appears here.'
-        : 'The query has to run before it can be translated.';
-    }
-    lastPeek = text;
-    el.peek.classList.toggle('is-muted', !text);
-    el.peek.innerHTML = text ? esc(text).replace(KEYWORD_RE, '<span class="kw">$1</span>') : esc(note);
-    el.btnUseSQL.hidden = !text || !has(level(), 'sql');
+    var out = algebraAsSQL();
+    lastPeek = out.text || null;
+    el.peek.classList.toggle('is-muted', !out.text);
+    el.peek.innerHTML = out.text
+      ? esc(out.text).replace(KEYWORD_RE, '<span class="kw">$1</span>')
+      : esc(out.reason);
+    el.btnUseSQL.hidden = !out.text || !has(level(), 'sql');
   }
 
   /* ---------- feedback ---------- */
@@ -867,6 +922,7 @@
     state.levelIndex = i;
     state.tree = null;
     state.sql = '';
+    state.carried = {};
     state.hintsShown = 0;
     state.armed = null;
     // A level the current language cannot ask simply switches language.
@@ -883,6 +939,7 @@
 
   function setMode(mode) {
     if (mode === state.mode || !has(level(), mode)) return;
+    var moved = carryOver(mode);
     state.mode = mode;
     state.hintsShown = 0;
     state.usedHelp = solvedIn(mode)[state.levelIndex] === 'silver';
@@ -891,6 +948,21 @@
     save();
     render();
     clearFeedback();
+    if (!moved) return;
+    if (moved.carried) {
+      // Reading the answer off the other language is a leg-up, so the level is
+      // worth a ✓ rather than a ★ until you write it yourself.
+      state.usedHelp = true;
+      setFeedback('info', mode === 'sql'
+        ? 'Your algebra, written out as SQL. <b>Clear</b> it if you would rather start from nothing.'
+        : 'Your query, read back as an expression tree.');
+    } else if (moved.stale) {
+      setFeedback('info', mode === 'sql'
+        ? 'Your SQL box already has a different query in it — <b>Clear</b> to rewrite it from the algebra.'
+        : 'The canvas already has a different query on it — <b>Clear</b> to rebuild it from your SQL.');
+    } else {
+      setFeedback('info', moved.reason);
+    }
   }
 
   function renderMode() {
@@ -1062,6 +1134,8 @@
     el.btnUseSQL.addEventListener('click', function () {
       var text = lastPeek;
       if (!text) return;
+      state.sql = text;
+      markSynced();
       setMode('sql');
       setSqlText(text);
       state.usedHelp = true;          // translating your own answer is still a leg-up
@@ -1131,6 +1205,7 @@
     document.getElementById('btnClear').addEventListener('click', function () {
       state.tree = null;
       state.sql = '';
+      state.carried = {};
       state.armed = null;
       setSqlError('');
       render();
@@ -1148,6 +1223,7 @@
       state.hintsShown = 0;
       state.tree = null;
       state.sql = '';
+      state.carried = {};
       if (!has(level(), state.mode)) state.mode = otherMode();
       save();
       render();

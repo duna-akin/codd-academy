@@ -349,6 +349,45 @@ JSDOM.fromFile(path, {
     errors.push('carrying the translated query into the SQL box did not work');
   }
 
+  // 10b. Switching language brings the query with you, both ways.
+  click(doc.querySelectorAll('.pill')[4]);              // level 5: Two conditions
+  click($('#modeRA'));                                 // the language is sticky across levels
+  expr.focus();
+  expr.value = "π_{ename, salary}(σ_{dept = 'Engineering' AND age < 40}(Employee))";
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  expr.blur();
+  click($('#modeSQL'));
+  console.log('carry→ :', JSON.stringify(sql.value.replace(/\n/g, ' ')));
+  if (!/^SELECT DISTINCT ename, salary/.test(sql.value)) errors.push('the algebra did not come across as SQL');
+  click($('#btnCheck'));
+  if (!/Correct/.test(text('#feedback'))) errors.push('the carried-over SQL did not answer the level');
+
+  // ...and back the other way, from a query the student wrote themselves.
+  click($('#btnClear'));
+  click($('#modeSQL'));
+  typeSql('SELECT ename, salary FROM Employee WHERE age < 40 AND dept = \'Engineering\'');
+  click($('#modeRA'));
+  console.log('←carry :', JSON.stringify(expr.value), '| canvas nodes =', doc.querySelectorAll('.node').length);
+  if (!/^π_\{ename, salary\}/.test(expr.value)) errors.push('the SQL did not come across as an expression tree');
+  click($('#btnCheck'));
+  if (!/Correct/.test(text('#feedback'))) errors.push('the carried-over algebra did not answer the level');
+
+  // Some SQL has no algebra at all, and says which part.
+  click(doc.querySelectorAll('.pill')[14]);             // level 15: For all
+  click($('#modeSQL'));
+  typeSql('SELECT DISTINCT eid FROM WorksOn W1 WHERE NOT EXISTS (' +
+          'SELECT * FROM Project P WHERE NOT EXISTS (' +
+          'SELECT * FROM WorksOn W2 WHERE W2.eid = W1.eid AND W2.pid = P.pid))');
+  click($('#btnCheck'));
+  const exists = /Correct/.test(text('#feedback'));
+  click($('#modeRA'));
+  console.log('noalgb :', text('#feedback').trim().slice(0, 72));
+  if (!exists) errors.push('the NOT EXISTS answer to level 15 was rejected');
+  if (!/no counterpart in the algebra/.test(text('#feedback'))) {
+    errors.push('switching away from an untranslatable query should explain itself');
+  }
+  if (doc.querySelectorAll('.node').length) errors.push('a refused translation should leave the canvas empty');
+
   // 11. Every level, in every language it can be asked in.
   let failed = 0;
   for (const mode of ['ra', 'sql']) {

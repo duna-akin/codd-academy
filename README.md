@@ -45,8 +45,9 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
   and the two stay in sync: typing rebuilds the tree, dragging rewrites the text. See
   [Typing expressions](#typing-expressions).
 - **Or answer in SQL.** The **Algebra / SQL** switch above the canvas swaps the editor: the operator
-  palette becomes a palette of clauses, and you write a query instead of building a tree. Progress is
-  kept per language, so every level can be earned twice. See [SQL](#sql).
+  palette becomes a palette of clauses, and you write a query instead of building a tree. Switching
+  brings your query with you, translated, in either direction. Progress is kept per language, so
+  every level can be earned twice. See [SQL](#sql).
 - **Hide the result to work blind.** The live result table is a fine teaching aid and a bad crutch,
   so the **Result** header collapses it. Errors stay visible while it is hidden — whether a query is
   *valid* is not the same as what its answer is — but the table and the row count go away, and
@@ -161,10 +162,10 @@ plainly beats a half-implemented three-valued logic.
 box. Since a query is several lines, <kbd>Enter</kbd> is a newline and
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> checks your answer.
 
-### The same query in SQL
+### Switching language carries the query with it
 
-Under the canvas, **The same query in SQL** writes out whatever tree you have built as a SQL query —
-`π_{ename}(σ_{salary > 60000}(Employee))` becomes
+Toggle to SQL and the tree you built is written out as a query; toggle back and your query is read
+back as a tree. `π_{ename}(σ_{salary > 60000}(Employee))` and
 
 ```sql
 SELECT DISTINCT ename
@@ -172,12 +173,30 @@ FROM Employee
 WHERE salary > 60000
 ```
 
-It translates one way only, and it is honest: before showing anything the game runs the SQL it just
-wrote and compares it with the algebra's own answer, so a translation that disagreed would be
-suppressed rather than shown. Every level's solution is checked this way by `npm test`.
+are two views of one thing, and the switch moves you between them.
 
-**Write it in SQL ›** carries the translation into the SQL editor. That counts as help, so the level
-is marked ✓ rather than ★ — you did the thinking in the other language.
+Nothing you wrote yourself is ever overwritten. A query only crosses when the other editor is empty
+or still holds exactly what it was last handed, so editing one side and toggling updates the other,
+while editing *both* leaves them alone and says so. A query that came across counts as help, so the
+level is worth ✓ rather than ★ until you write it yourself.
+
+Both directions are checked before you see them: the game runs the translation it just wrote and
+compares it with the original's answer, so a translation that quietly disagreed is refused rather
+than shown. `npm test` checks all 43 levels through both translations.
+
+**Some queries cannot cross, and that refusal is the lesson.** The algebra has no `ORDER BY`, no
+`LIMIT`, no computed columns, no `COUNT(DISTINCT …)`, and — the interesting one — no way to put a
+subquery inside a condition:
+
+> `EXISTS` has no counterpart in the algebra — σ only compares attributes and values, so this one
+> has to be built out of ⋈, − or ÷.
+
+That is exactly the boundary the advanced chapter is about. Thirty of the forty-three levels'
+SQL answers read back as algebra; the thirteen that do not are 15, 16, 18, 21, 22, 23, 25 and 37
+(all subqueries) and the SQL-only chapter.
+
+Under the canvas, **The same query in SQL** shows the translation without leaving the algebra, and
+**Write it in SQL ›** puts it in the editor even when the editor already has something in it.
 
 ## Colors
 
@@ -219,7 +238,7 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     src/index.template.html  markup, with placeholders for the inlined CSS and JS
     src/styles.css           all styling
     src/engine.js            relational algebra engine: relations, operators, condition parser, checking
-    src/sql.js               SQL engine over the same relations, and the algebra → SQL translation
+    src/sql.js               SQL engine over the same relations, and the translation both ways
     src/levels.js            the two databases and the 43 puzzles (each with an algebra and/or a SQL answer)
     src/app.js               UI: drag and drop, tree editing, the SQL editor, live evaluation, progress
     test/sql.js              unit test for the SQL engine and every level's two answers
@@ -231,9 +250,10 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     npm test         # builds, runs the SQL unit test, then drives the built index.html
 
 `test/sql.js` runs the SQL engine against a battery of queries and error messages, renders all 37
-algebra solutions as SQL and checks each one still returns the same table, and checks every level's
-SQL answer against its algebra twin row for row — so a level can never mean two different things in
-its two languages.
+algebra solutions as SQL, reads all 43 SQL answers back as algebra, checks that every translation
+still returns the same table, and checks every level's SQL answer against its algebra twin row for
+row — so a level can never mean two different things in its two languages. It prints the levels whose
+SQL has no algebra form, with the reason, which is a useful map of where the two languages part.
 
 The smoke test boots the page, places nodes by click and by drop, checks a wrong answer and a broken
 condition, exercises tab completion in both editors, then solves every level through the UI in every

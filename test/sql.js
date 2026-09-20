@@ -200,6 +200,29 @@ GAME.LEVELS.forEach((level, i) => {
 });
 console.log('  ' + withSql + '/' + GAME.LEVELS.length + ' levels carry a SQL answer');
 
+/* And back the other way: a SQL answer with an algebra form must read back as a
+   tree that answers the same question, and the rest must refuse with a reason
+   rather than crash or — worse — quietly return the wrong tree. */
+console.log('back to algebra:');
+let readBack = 0;
+const refused = [];
+GAME.LEVELS.forEach((level, i) => {
+  const data = db(level.db);
+  let tree;
+  try {
+    tree = SQL.toTree(level.sql.solution, data);
+  } catch (e) {
+    ok('level ' + (i + 1) + ' refusal explains itself', !!e.noAlgebra, 'threw "' + e.message + '"');
+    refused.push('  ' + (i + 1) + '. ' + level.title.padEnd(30) + e.message.replace(/ has no counterpart.*$/, ''));
+    return;
+  }
+  readBack++;
+  const verdict = RA.compare(RA.evaluate(tree, data), SQL.run(level.sql.solution, data), {});
+  ok('level ' + (i + 1) + ' reads back', verdict.ok, verdict.message + ' — ' + RA.toText(tree));
+});
+console.log('  ' + readBack + '/' + GAME.LEVELS.length + ' SQL answers read back as algebra; the rest say why not:');
+refused.forEach(line => console.log(line));
+
 /* The answer a student is checked against, in each language. */
 console.log('shapes:');
 GAME.LEVELS.forEach((level, i) => {

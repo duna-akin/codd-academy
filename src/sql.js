@@ -1315,6 +1315,218 @@
     return q;
   }
 
+  /* ---------- reading SQL back as an algebra tree ---------- */
+
+  function relNode(name) { return { type: 'rel', name: name }; }
+  function opNode(name, param, children, group) {
+    return { type: 'op', op: name, param: param || '', group: group || '', children: children };
+  }
+
+  // Flagged, so the caller can tell "the algebra cannot say this" apart from
+  // "you have not finished typing".
+  function noAlgebra(what, why) {
+    var e = err(what + ' has no counterpart in the algebra' + (why ? ' — ' + why : '') + '.');
+    e.noAlgebra = true;
+    throw e;
+  }
+
+  /* Resolves a name written in SQL against the attributes the algebra actually
+     has. SQL qualifies every column; the algebra only qualifies the clashes. */
+  function algebraAttr(attrs, written) {
+    var hit = findAttr(attrs, written);
+    if (hit) return hit;
+    hit = findAttr(attrs, bareName(written));
+    if (hit) return hit;
+    throw err('There is no attribute "' + written + '" in ' + attrs.join(', ') + '.');
+  }
+
+  function litText(v) {
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+    if (v === null) noAlgebra('NULL', 'every attribute here has a value');
+    if (String(v).indexOf("'") !== -1) noAlgebra('a quote inside a text value', 'the algebra cannot escape one');
+    return "'" + v + "'";
+  }
+
+  /* A SQL condition as the text σ takes. The pieces σ has no word for are
+     rewritten where that is exact, and refused where it is not. */
+  function condText(n, attrs, aggMap) {
+    switch (n.k) {
+      case 'and': return condText(n.l, attrs, aggMap) + ' AND ' + condText(n.r, attrs, aggMap);
+      case 'or': return '(' + condText(n.l, attrs, aggMap) + ' OR ' + condText(n.r, attrs, aggMap) + ')';
+      case 'not': return 'NOT (' + condText(n.l, attrs, aggMap) + ')';
+      case 'lit': return n.v ? 'TRUE' : 'FALSE';
+      case 'cmp':
+        return operandText(n.l, attrs, aggMap) + ' ' + n.op + ' ' + operandText(n.r, attrs, aggMap);
+      case 'between': {
+        var v = operandText(n.l, attrs, aggMap);
+        var range = v + ' >= ' + operandText(n.lo, attrs, aggMap) +
+                    ' AND ' + v + ' <= ' + operandText(n.hi, attrs, aggMap);
+        return n.negated ? 'NOT (' + range + ')' : '(' + range + ')';
+      }
+      case 'in': {
+        if (n.sub) {
+          noAlgebra('a subquery inside a condition',
+            'σ only compares attributes and values, so this one has to be built out of ⋈, − or ÷');
+        }
+        var left = operandText(n.l, attrs, aggMap);
+        var any = n.list.map(function (item) {
+          return left + ' = ' + operandText(item, attrs, aggMap);
+        }).join(' OR ');
+        return n.negated ? 'NOT (' + any + ')' : '(' + any + ')';
+      }
+      case 'exists':
+        noAlgebra('EXISTS',
+          'σ only compares attributes and values, so this one has to be built out of ⋈, − or ÷');
+        break;
+      case 'like': noAlgebra('LIKE', 'σ compares whole values, not patterns'); break;
+      case 'isnull': noAlgebra('IS NULL', 'every attribute here has a value'); break;
+    }
+    noAlgebra('this condition');
+  }
+
+  function operandText(n, attrs, aggMap) {
+    if (n.k === 'lit') return litText(n.v);
+    if (n.k === 'col') return algebraAttr(attrs, n.name);
+    if (n.k === 'agg' && aggMap && aggMap[exprText(n)]) return aggMap[exprText(n)];
+    if (n.k === 'agg') noAlgebra('an aggregate outside HAVING');
+    if (n.k === 'bin' || n.k === 'neg') noAlgebra('arithmetic in a condition', 'σ compares what is already there');
+    if (n.k === 'sub') {
+      noAlgebra('a subquery inside a condition',
+        'σ only compares attributes and values, so this one has to be built out of ⋈, − or ÷');
+    }
+    noAlgebra('this value');
+  }
+
+  function collectAggs(n, out) {
+    if (!n || typeof n !== 'object') return;
+    if (n.k === 'sub' || n.k === 'exists') return;       // an inner query has its own groups
+    if (n.k === 'agg') { out.push(n); return; }
+    ['l', 'r', 'lo', 'hi'].forEach(function (f) { collectAggs(n[f], out); });
+    (n.list || []).forEach(function (x) { collectAggs(x, out); });
+  }
+
+  function queryToTree(node, db) {
+    if (node.order) noAlgebra('ORDER BY', 'a relation has no row order to set');
+    if (node.limit != null) noAlgebra('LIMIT', 'with no order there is no first row to take');
+    if (node.kind === 'setop') {
+      if (node.all) noAlgebra('UNION ALL', 'the algebra has no duplicate rows to keep');
+      var kind = { union: 'union', intersect: 'intersect', except: 'difference' }[node.op];
+      return opNode(kind, '', [queryToTree(node.left, db), queryToTree(node.right, db)]);
+    }
+    return selectToTree(node, db);
+  }
+
+  function selectToTree(n, db) {
+    if (!n.from.length) noAlgebra('a query with no FROM', 'every expression starts from a relation');
+    var tree = n.from.map(function (item) { return fromItemToTree(item, db); })
+      .reduce(function (a, b) { return opNode('product', '', [a, b]); });
+
+    if (n.where) {
+      if (collectHas(n.where)) noAlgebra('an aggregate in WHERE');
+      tree = opNode('select', condText(n.where, attrsOf(tree, db), null), [tree]);
+    }
+
+    var star = n.items.some(function (i) { return i.star; });
+    if (n.items.some(function (i) { return i.star && i.qualifier; })) {
+      noAlgebra('a qualified star', 'list the columns you want instead');
+    }
+
+    var aggs = [];
+    n.items.forEach(function (i) { if (!i.star) collectAggs(i.expr, aggs); });
+    collectAggs(n.having, aggs);
+
+    var aggMap = {};
+    if (aggs.length) {
+      if (star) noAlgebra('SELECT * with an aggregate', 'name the columns you are grouping by');
+      var srcAttrs = attrsOf(tree, db);
+      var grouping = (n.group || []).map(function (g) {
+        if (g.k !== 'col') noAlgebra('grouping by an expression', 'ℱ groups by attributes');
+        return algebraAttr(srcAttrs, g.name);
+      });
+      var calls = [];
+      aggs.forEach(function (a) {
+        if (a.distinct) noAlgebra('COUNT(DISTINCT …)', 'ℱ counts the rows of a group as it finds them');
+        var arg;
+        if (a.arg === '*') arg = '*';
+        else if (a.arg.k === 'col') arg = algebraAttr(srcAttrs, a.arg.name);
+        else noAlgebra('an aggregate over an expression', 'ℱ takes one attribute');
+        var call = a.fn + '(' + arg + ')';
+        if (calls.indexOf(call) === -1) calls.push(call);
+        // ℱ names its output after the call, and that name is what σ and π use.
+        aggMap[exprText(a)] = arg === '*' ? 'COUNT' : a.fn + '_' + arg;
+      });
+      tree = opNode('group', calls.join(', '), [tree], grouping.join(', '));
+    }
+
+    if (n.having) tree = opNode('select', condText(n.having, attrsOf(tree, db), aggMap), [tree]);
+
+    if (!star) {
+      var current = attrsOf(tree, db);
+      var keep = [], named = [], renamed = false;
+      n.items.forEach(function (item) {
+        var name;
+        if (item.expr.k === 'col') name = algebraAttr(current, item.expr.name);
+        else if (item.expr.k === 'agg') name = aggMap[exprText(item.expr)];
+        else noAlgebra('a computed column', 'π can keep a column, but it cannot make one');
+        keep.push(name);
+        named.push(item.alias || name);
+        if (item.alias && item.alias !== name) renamed = true;
+      });
+      if (keep.join(', ') !== current.join(', ')) tree = opNode('project', keep.join(', '), [tree]);
+      if (renamed) tree = opNode('rename', '(' + named.join(', ') + ')', [tree]);
+    }
+    return tree;
+  }
+
+  function collectHas(n) {
+    var found = [];
+    collectAggs(n, found);
+    return found.length > 0;
+  }
+
+  function attrsOf(tree, db) { return RA.evaluate(tree, db).attrs; }
+
+  function fromItemToTree(item, db) {
+    if (item.kind === 'table') {
+      var base = lookupTable(db, item.name);
+      var node = relNode(base.name);
+      return item.alias && item.alias !== base.name ? opNode('rename', item.alias, [node]) : node;
+    }
+    if (item.kind === 'derived') return opNode('rename', item.alias, [queryToTree(item.query, db)]);
+
+    var left = fromItemToTree(item.left, db), right = fromItemToTree(item.right, db);
+    if (item.natural) return opNode('join', '', [left, right]);
+    if (item.using) {
+      var shared = attrsOf(left, db).map(bareName).filter(function (a) {
+        return attrsOf(right, db).map(bareName).indexOf(a) !== -1;
+      });
+      var asked = item.using.map(bareName);
+      if (shared.slice().sort().join(',') !== asked.slice().sort().join(',')) {
+        noAlgebra('USING on only some of the shared columns', '⋈ always joins on all of them');
+      }
+      return opNode('join', '', [left, right]);
+    }
+    if (item.on) {
+      var attrs = attrsOf(opNode('product', '', [left, right]), db);
+      return opNode('join', condText(item.on, attrs, null), [left, right]);
+    }
+    return opNode('product', '', [left, right]);
+  }
+
+  /* The other direction. Like fromTree it is checked before it is handed back:
+     a tree that answered a different question would teach the wrong thing. */
+  function toTree(text, db) {
+    if (!String(text == null ? '' : text).trim()) throw err('incomplete');
+    var query = parse(text);
+    var tree = queryToTree(query, db);
+    var want = evalQuery(query, db, null);
+    if (!RA.compare(RA.evaluate(tree, db), want, {}).ok) {
+      noAlgebra('that query', 'at least not one that comes out the same — build it by hand');
+    }
+    return tree;
+  }
+
   /* The left-hand palette in SQL mode: the clauses, in the order a query is
      written, with what each one is for. */
   var CLAUSES = [
@@ -1348,6 +1560,7 @@
     CLAUSES: CLAUSES,
     parse: parse,
     fromTree: fromTree,
+    toTree: toTree,
     KEYWORDS: KEYWORDS,
     AGGREGATES: Object.keys(AGGREGATES).filter(function (f) { return f !== 'AVERAGE'; }),
     error: err

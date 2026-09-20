@@ -183,6 +183,16 @@
     your answer. Levels 38 and up are SQL only: the algebra has no way to ask them.
   </p>
   <p>
+    <b>Switching carries your query with it.</b> Toggle to SQL and the tree you built is written out
+    as a query; toggle back and your query is read back as a tree. Whatever you wrote yourself is
+    never overwritten — the query only crosses when the other side is empty or still holds what it
+    was handed. Some queries cannot cross, and the game says which part is the problem:
+    <code>EXISTS</code> and subqueries inside a condition, <code>ORDER BY</code>, <code>LIMIT</code>,
+    computed columns and <code>COUNT(DISTINCT …)</code> have no counterpart in the algebra — that
+    refusal is the lesson. A query that came across counts as help, so the level is worth ✓ rather
+    than ★ until you write it yourself.
+  </p>
+  <p>
     <b>Typing:</b> the <i>Type it</i> box takes standard notation —
     <code>π_{ename}(σ_{salary &gt; 60000}(Employee))</code> — and the canvas follows along as you type.
     No Greek keyboard needed: <code>project</code>, <code>select</code>, <code>rename</code>,
