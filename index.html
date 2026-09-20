@@ -64,7 +64,9 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .topbar h1 { font-size: 17px; letter-spacing: .2px; }
 .tagline { margin: 1px 0 0; font-size: 12.5px; color: var(--text-dim); }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
-.progress { font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.progress { font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.progress .now { color: var(--accent); font-weight: 600; }
+.progress .sep { padding: 0 6px; opacity: .5; }
 
 /* ---------- buttons ---------- */
 
@@ -81,6 +83,32 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   color: #fff; border-color: transparent; font-weight: 700;
 }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.14); background: linear-gradient(145deg, var(--accent-deep), var(--maroon)); }
+
+.btn-tiny { padding: 4px 9px; font-size: 11.5px; }
+
+/* ---------- algebra / SQL switch ---------- */
+
+.mode-switch {
+  display: inline-flex; gap: 2px; padding: 2px; margin-right: auto;
+  background: var(--bg-inset); border: 1px solid var(--line); border-radius: 9px;
+}
+.mode-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border: none; border-radius: 7px; cursor: pointer;
+  background: none; color: var(--text-dim); font: inherit; font-size: 12.5px; font-weight: 600;
+  transition: background .12s, color .12s;
+}
+.mode-btn:hover:not(:disabled) { color: var(--text); background: #ffffff08; }
+.mode-btn[aria-selected="true"] {
+  background: linear-gradient(145deg, var(--accent-deep), var(--maroon)); color: #fff;
+}
+.mode-btn:disabled { opacity: .3; cursor: not-allowed; }
+.mode-sym { font-family: var(--mono); font-size: 14px; }
+.mode-note {
+  margin: 0 0 10px; padding: 7px 11px; border-radius: 7px; font-size: 12.5px;
+  background: #1b2530; border: 1px solid #4ea8d844; color: #cde6f4;
+}
+.mode-note b { font-family: var(--mono); }
 
 /* ---------- level pills ---------- */
 
@@ -115,6 +143,9 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .pill:hover { border-color: var(--accent-deep); color: var(--text); }
 .pill.current { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .pill.solved { color: var(--good); border-color: #79c39b55; }
+/* A level the current language cannot ask; clicking it switches language. */
+.pill.unavailable { opacity: .42; border-style: dashed; }
+.pill.unavailable:hover { opacity: .75; }
 .pill.solved.gold { color: var(--gold); border-color: #d8a65755; }
 /* flex-basis:100% forces each chapter onto its own row of pills */
 .pill-chapter {
@@ -149,6 +180,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 /* ---------- palette ---------- */
 
 .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 7px; }
+.palette-wide { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
 .op-chip {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 9px 4px 7px; border-radius: 9px; cursor: grab;
@@ -165,6 +197,16 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 20px; letter-spacing: .4px;
 }
 .op-chip.is-new { border-color: #d8a65755; }
+
+/* clause chips: same furniture as the operator chips, no symbol */
+.clause-chip { flex-direction: row; justify-content: center; padding: 8px 6px; cursor: pointer; }
+.clause-word { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .2px; }
+.clause-clause .clause-word { color: var(--accent); }
+.clause-join .clause-word { color: var(--warm); }
+.clause-group .clause-word, .clause-fn .clause-word { color: var(--gold); }
+.clause-set .clause-word { color: var(--blue); }
+.clause-sub .clause-word { color: var(--pale); }
+.clause-sort .clause-word { color: var(--good); }
 
 .op-project .op-sym, .node-op.op-project .node-sym { color: var(--accent); }
 .op-group .op-sym, .node-op.op-group .node-sym { color: var(--gold); }
@@ -342,6 +384,38 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   font-family: var(--mono); font-size: 12.5px;
 }
 
+/* ---------- the SQL editor ---------- */
+
+.sql-wrap { position: relative; }
+.sql-input, .sql-mirror {
+  width: 100%; padding: 13px 15px; border-radius: 9px;
+  font-family: var(--mono); font-size: 14px; line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: break-word; border: 1px solid var(--line);
+}
+.sql-input {
+  background:
+    radial-gradient(circle at 1px 1px, #3a2b2f 1px, transparent 0) 0 0 / 18px 18px,
+    var(--bg-inset);
+  color: var(--text); outline: none; resize: vertical; min-height: 150px; display: block;
+}
+.sql-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(231, 154, 168, .18); }
+.sql-input::placeholder { color: #6d5b5f; }
+/* an invisible copy of the text, to find where the caret is on screen */
+.sql-mirror {
+  position: absolute; inset: 0; visibility: hidden; pointer-events: none;
+  border-color: transparent; color: transparent;
+}
+
+.peek { margin-top: 10px; }
+.peek-head { display: flex; align-items: center; gap: 10px; }
+.peek-body {
+  margin: 8px 0 0; padding: 11px 14px; overflow-x: auto;
+  background: var(--bg-inset); border: 1px solid var(--line); border-radius: 8px;
+  font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--text-dim);
+}
+.peek-body .kw { color: var(--accent); font-weight: 600; }
+.peek-body.is-muted { color: var(--text-faint); font-style: italic; }
+
 /* ---------- feedback ---------- */
 
 .feedback { margin-top: 10px; font-size: 13.5px; padding: 0; }
@@ -349,6 +423,11 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 .feedback-good { background: #14261d; border-color: #79c39b55 !important; color: #c8e8d6; }
 .feedback-bad { background: #2e1417; border-color: #e8756f55 !important; color: #f6d2ce; }
 .feedback-info { background: #1b2530; border-color: #4ea8d844 !important; color: #cde6f4; }
+.link-btn {
+  border: none; background: none; padding: 0; margin-left: 6px; cursor: pointer;
+  color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px;
+}
+.link-btn:hover { opacity: .8; }
 
 /* ---------- output ---------- */
 
@@ -387,7 +466,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     <span class="brand-mark">π</span>
     <div>
       <h1>Relational Algebra Playground</h1>
-      <p class="tagline">Drag operators onto the canvas to answer each question.</p>
+      <p class="tagline">Answer each question with the algebra, or with SQL.</p>
     </div>
   </div>
   <div class="topbar-right">
@@ -407,10 +486,16 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
 <div class="layout">
   <aside class="panel panel-left">
-    <section class="block">
+    <section class="block" id="opBlock">
       <h2 class="block-title">Operators</h2>
       <p class="block-sub">Drag one onto the canvas, or click it and then click a slot.</p>
       <div id="palette" class="palette"></div>
+    </section>
+
+    <section class="block" id="clauseBlock" hidden>
+      <h2 class="block-title">Clauses</h2>
+      <p class="block-sub">Click one to drop it into the query at the cursor.</p>
+      <div id="clauses" class="palette palette-wide"></div>
     </section>
 
     <section class="block">
@@ -433,6 +518,16 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     <section class="block block-canvas">
       <div class="block-head">
         <h2 class="block-title">Your query</h2>
+        <div class="mode-switch" role="tablist" aria-label="Answer in">
+          <button id="modeRA" class="mode-btn" type="button" role="tab"
+                  aria-selected="true" aria-controls="raSurface">
+            <span class="mode-sym">π</span> Algebra
+          </button>
+          <button id="modeSQL" class="mode-btn" type="button" role="tab"
+                  aria-selected="false" aria-controls="sqlSurface">
+            <span class="mode-sym">⌘</span> SQL
+          </button>
+        </div>
         <div class="toolbar">
           <button id="btnPrev" class="btn btn-ghost" type="button">‹ Prev</button>
           <button id="btnNext" class="btn btn-ghost" type="button">Next ›</button>
@@ -442,23 +537,52 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
           <button id="btnCheck" class="btn btn-primary" type="button">Check answer</button>
         </div>
       </div>
-      <div id="canvas" class="canvas"></div>
-      <div class="formula-bar">
-        <span class="formula-label">Expression</span>
-        <div id="formula" class="formula"></div>
-      </div>
-      <div class="expr-type">
-        <label class="formula-label" for="exprInput">Type it</label>
-        <div class="expr-wrap">
-          <input id="exprInput" class="expr-input" type="text" spellcheck="false" autocomplete="off"
-                 autocapitalize="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
-                 aria-controls="exprSuggest"
-                 placeholder="type project, select, Employee … then press Tab">
-          <span id="exprMirror" class="expr-mirror" aria-hidden="true"></span>
-          <ul id="exprSuggest" class="suggest" role="listbox" hidden></ul>
+      <p id="modeNote" class="mode-note" hidden></p>
+
+      <div id="raSurface" role="tabpanel" aria-labelledby="modeRA">
+        <div id="canvas" class="canvas"></div>
+        <div class="formula-bar">
+          <span class="formula-label">Expression</span>
+          <div id="formula" class="formula"></div>
+        </div>
+        <div class="expr-type">
+          <label class="formula-label" for="exprInput">Type it</label>
+          <div class="expr-wrap">
+            <input id="exprInput" class="expr-input" type="text" spellcheck="false" autocomplete="off"
+                   autocapitalize="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
+                   aria-controls="exprSuggest"
+                   placeholder="type project, select, Employee … then press Tab">
+            <span id="exprMirror" class="expr-mirror" aria-hidden="true"></span>
+            <ul id="exprSuggest" class="suggest" role="listbox" hidden></ul>
+          </div>
+        </div>
+        <p id="exprError" class="expr-error" hidden></p>
+        <div class="peek">
+          <div class="peek-head">
+            <button id="peekToggle" class="block-toggle collapsed" type="button"
+                    aria-expanded="false" aria-controls="peek">
+              <span class="chev" aria-hidden="true">▾</span>
+              <span class="formula-label">The same query in SQL</span>
+            </button>
+            <button id="btnUseSQL" class="btn btn-ghost btn-tiny" type="button" hidden>Write it in SQL ›</button>
+          </div>
+          <pre id="peek" class="peek-body" hidden></pre>
         </div>
       </div>
-      <p id="exprError" class="expr-error" hidden></p>
+
+      <div id="sqlSurface" role="tabpanel" aria-labelledby="modeSQL" hidden>
+        <div class="sql-wrap">
+          <textarea id="sqlInput" class="sql-input" spellcheck="false" autocomplete="off"
+                    autocapitalize="off" autocorrect="off" rows="7" role="combobox"
+                    aria-expanded="false" aria-autocomplete="list" aria-controls="sqlSuggest"
+                    aria-label="Your SQL query"
+                    placeholder="SELECT …&#10;FROM …&#10;WHERE …"></textarea>
+          <div id="sqlMirror" class="sql-mirror" aria-hidden="true"></div>
+          <ul id="sqlSuggest" class="suggest" role="listbox" hidden></ul>
+        </div>
+        <p id="sqlError" class="expr-error" hidden></p>
+      </div>
+
       <div id="feedback" class="feedback"></div>
     </section>
 
@@ -497,6 +621,17 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>, <code>MIN</code> and <code>MAX</code>;
     the output columns are named after them (<code>COUNT_eid</code>), so σ can filter on them the
     way SQL's HAVING does. Type <code>group</code> for the ℱ.
+  </p>
+  <p>
+    <b>SQL mode:</b> the switch above the canvas changes the language, not the question. Your answer is
+    checked by running it, so any query that returns the right table is right — but SQL keeps duplicate
+    rows, so <code>DISTINCT</code> is yours to remember. Supported: <code>SELECT</code>/<code>DISTINCT</code>,
+    <code>FROM</code> with aliases and <code>JOIN … ON</code> / <code>USING</code> / <code>NATURAL JOIN</code>,
+    <code>WHERE</code>, <code>GROUP BY</code>, <code>HAVING</code>, <code>ORDER BY</code>,
+    <code>LIMIT</code>, <code>UNION</code> / <code>INTERSECT</code> / <code>EXCEPT</code>, and subqueries
+    with <code>IN</code>, <code>EXISTS</code> or a single value — correlated to the outer query or not.
+    <kbd>Tab</kbd> completes clauses, table names and column names; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> checks
+    your answer. Levels 38 and up are SQL only: the algebra has no way to ask them.
   </p>
   <p>
     <b>Typing:</b> the <i>Type it</i> box takes standard notation —
@@ -2857,7 +2992,7 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   };
 
   var LEVELS = [
-    {
+{
       db: 'company',
       chapter: 'Basics',
       title: 'The whole table',
@@ -2869,9 +3004,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'Relations live in the left panel — drag the Employee chip into the empty slot.',
         'Or type it: put Employee in the <i>Type it</i> box under the canvas.'
       ],
-      solution: rel('Employee')
+      solution: rel('Employee'),
+      sql: {
+        tip: '<b>SELECT</b> lists the columns you want and <b>FROM</b> says which table to read; <b>*</b> means every column.',
+        focus: ['SELECT', 'FROM'],
+        hints: [
+          'The whole query is five characters and a table name.',
+          'SELECT * FROM Employee'
+        ],
+        solution: 'SELECT *\n' +
+                  'FROM Employee'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Just the names',
       question: 'Return only the names of all employees.',
@@ -2882,9 +3027,18 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'The attribute you want is called ename.',
         'π<sub>ename</sub>(Employee)'
       ],
-      solution: op('project', 'ename', [rel('Employee')])
+      solution: op('project', 'ename', [rel('Employee')]),
+      sql: {
+        tip: 'Naming columns after SELECT is what π does: anything you do not name is dropped.',
+        hints: [
+          'Put the column you want where the * was.',
+          'SELECT ename FROM Employee'
+        ],
+        solution: 'SELECT ename\n' +
+                  'FROM Employee'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Filtering rows',
       question: 'Return the full records of every employee in the Engineering department.',
@@ -2894,9 +3048,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'σ goes around Employee, and the condition compares dept to a quoted string.',
         "σ<sub>dept = 'Engineering'</sub>(Employee)"
       ],
-      solution: op('select', "dept = 'Engineering'", [rel('Employee')])
+      solution: op('select', "dept = 'Engineering'", [rel('Employee')]),
+      sql: {
+        tip: '<b>WHERE</b> is σ — it keeps the rows its condition is true for. Text values need quotes.',
+        focus: ['WHERE'],
+        hints: [
+          'Keep all the columns, but only some of the rows.',
+          "SELECT * FROM Employee WHERE dept = 'Engineering'"
+        ],
+        solution: 'SELECT *\n' +
+                  'FROM Employee\n' +
+                  "WHERE dept = 'Engineering'"
+      }
     },
-    {
+{
       db: 'company',
       title: 'Filter, then project',
       question: 'Return the names of employees who earn more than 60000.',
@@ -2907,9 +3072,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'Drop π on the canvas first, then σ inside it, then Employee inside that.',
         'π<sub>ename</sub>(σ<sub>salary &gt; 60000</sub>(Employee))'
       ],
-      solution: op('project', 'ename', [op('select', 'salary > 60000', [rel('Employee')])])
+      solution: op('project', 'ename', [op('select', 'salary > 60000', [rel('Employee')])]),
+      sql: {
+        tip: 'One query does both jobs. SQL applies WHERE first and the SELECT list afterwards, whichever order you write them in.',
+        hints: [
+          'You need a SELECT list and a WHERE clause.',
+          'SELECT ename FROM Employee WHERE salary > 60000'
+        ],
+        solution: 'SELECT ename\n' +
+                  'FROM Employee\n' +
+                  'WHERE salary > 60000'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Two conditions',
       question: 'Return the name and salary of every Engineering employee under 40.',
@@ -2921,9 +3096,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('project', 'ename, salary', [
         op('select', "dept = 'Engineering' AND age < 40", [rel('Employee')])
-      ])
+      ]),
+      sql: {
+        tip: 'Conditions combine with AND / OR / NOT and parentheses, exactly as they do in σ.',
+        hints: [
+          'Two columns in the SELECT list, two conditions joined by AND.',
+          "SELECT ename, salary FROM Employee WHERE dept = 'Engineering' AND age < 40"
+        ],
+        solution: 'SELECT ename, salary\n' +
+                  'FROM Employee\n' +
+                  "WHERE dept = 'Engineering' AND age < 40"
+      }
     },
-    {
+{
       db: 'company',
       title: 'Either one',
       question: 'Return the ids of employees who work in Sales or in Marketing.',
@@ -2935,9 +3120,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('project', 'eid', [
         op('select', "dept = 'Sales' OR dept = 'Marketing'", [rel('Employee')])
-      ])
+      ]),
+      sql: {
+        tip: 'OR works. <b>IN (...)</b> says the same thing with less typing, and reads better as the list grows.',
+        focus: ['IN'],
+        hints: [
+          "Either dept = 'Sales' OR dept = 'Marketing' …",
+          "…or the short way: WHERE dept IN ('Sales', 'Marketing')"
+        ],
+        solution: 'SELECT eid\n' +
+                  'FROM Employee\n' +
+                  "WHERE dept IN ('Sales', 'Marketing')"
+      }
     },
-    {
+{
       db: 'company',
       chapter: 'Set operations',
       title: 'Renaming things',
@@ -2951,9 +3147,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'ρ takes the form Roster(id, person) — the attribute list is positional.',
         'ρ<sub>Roster(id, person)</sub>(π<sub>eid, ename</sub>(Employee))'
       ],
-      solution: op('rename', 'Roster(id, person)', [op('project', 'eid, ename', [rel('Employee')])])
+      solution: op('rename', 'Roster(id, person)', [op('project', 'eid, ename', [rel('Employee')])]),
+      sql: {
+        question: 'Return every employee id and name, with the two columns named <b>id</b> and <b>person</b>.',
+        tip: '<b>AS</b> renames a column. SQL has no name for the result as a whole, so ρ splits in two here: AS for columns, and the alias in FROM for tables.',
+        focus: ['AS'],
+        hints: [
+          'Each column gets its own AS.',
+          'SELECT eid AS id, ename AS person FROM Employee'
+        ],
+        solution: 'SELECT eid AS id, ename AS person\n' +
+                  'FROM Employee'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Pooling two relations',
       question: 'Return every department name that appears anywhere — whether it has employees in it, ' +
@@ -2968,9 +3175,21 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       solution: op('union', '', [
         op('project', 'dept', [rel('Employee')]),
         op('project', 'dept', [rel('Department')])
-      ])
+      ]),
+      sql: {
+        tip: '<b>UNION</b> stacks two results and removes the duplicates; UNION ALL keeps them. Both sides need the same number of columns.',
+        focus: ['UNION'],
+        hints: [
+          'Two complete SELECTs with UNION between them.',
+          'SELECT dept FROM Employee UNION SELECT dept FROM Department',
+          'No DISTINCT needed — UNION already dropped the repeats.'
+        ],
+        solution: 'SELECT dept FROM Employee\n' +
+                  'UNION\n' +
+                  'SELECT dept FROM Department'
+      }
     },
-    {
+{
       db: 'company',
       title: 'The ones that are missing',
       question: 'Return the ids of employees who are not working on any project.',
@@ -2984,9 +3203,21 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       solution: op('difference', '', [
         op('project', 'eid', [rel('Employee')]),
         op('project', 'eid', [rel('WorksOn')])
-      ])
+      ]),
+      sql: {
+        tip: '<b>EXCEPT</b> is −: the rows of the first query that the second one does not have. (Oracle spells it MINUS.)',
+        focus: ['EXCEPT'],
+        hints: [
+          'Everyone, minus everyone with an assignment.',
+          'SELECT eid FROM Employee EXCEPT SELECT eid FROM WorksOn',
+          'A subquery says it too: WHERE eid NOT IN (SELECT eid FROM WorksOn).'
+        ],
+        solution: 'SELECT eid FROM Employee\n' +
+                  'EXCEPT\n' +
+                  'SELECT eid FROM WorksOn'
+      }
     },
-    {
+{
       db: 'company',
       title: 'In both lists',
       question: 'Return the departments that are on floor 2 <i>and</i> have at least one employee older than 40.',
@@ -3000,9 +3231,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       solution: op('intersect', '', [
         op('project', 'dept', [op('select', 'floor = 2', [rel('Department')])]),
         op('project', 'dept', [op('select', 'age > 40', [rel('Employee')])])
-      ])
+      ]),
+      sql: {
+        tip: '<b>INTERSECT</b> keeps what both queries returned. Filter each side first, then meet in the middle.',
+        focus: ['INTERSECT'],
+        hints: [
+          'Two filtered queries, one INTERSECT.',
+          'SELECT dept FROM Department WHERE floor = 2 INTERSECT SELECT dept FROM Employee WHERE age > 40'
+        ],
+        solution: 'SELECT dept FROM Department WHERE floor = 2\n' +
+                  'INTERSECT\n' +
+                  'SELECT dept FROM Employee WHERE age > 40'
+      }
     },
-    {
+{
       db: 'company',
       chapter: 'Joins',
       title: 'Connecting relations',
@@ -3016,9 +3258,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('project', 'ename, pname', [
         op('join', '', [op('join', '', [rel('Employee'), rel('WorksOn')]), rel('Project')])
-      ])
+      ]),
+      sql: {
+        tip: '<b>NATURAL JOIN</b> is ⋈: it pairs rows on every column the two tables share. Chain them, and three tables meet.',
+        focus: ['NATURAL JOIN'],
+        hints: [
+          'Employee and WorksOn share eid; WorksOn and Project share pid.',
+          'SELECT ename, pname FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project',
+          'The long way works too: FROM Employee, WorksOn, Project WHERE Employee.eid = WorksOn.eid AND WorksOn.pid = Project.pid.'
+        ],
+        solution: 'SELECT ename, pname\n' +
+                  'FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Join and filter',
       question: 'Return the employee name and project name for every assignment of more than 10 hours.',
@@ -3032,9 +3285,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         op('select', 'hours > 10', [
           op('join', '', [op('join', '', [rel('Employee'), rel('WorksOn')]), rel('Project')])
         ])
-      ])
+      ]),
+      sql: {
+        tip: 'The join builds the rows; WHERE then throws some away. It does not matter that hours comes from the middle table.',
+        hints: [
+          'Same join as last time, with a WHERE on the end.',
+          'SELECT ename, pname FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project WHERE hours > 10'
+        ],
+        solution: 'SELECT ename, pname\n' +
+                  'FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project\n' +
+                  'WHERE hours > 10'
+      }
     },
-    {
+{
       db: 'school',
       title: 'A new database',
       question: 'Return the names of students who earned an A in at least one course.',
@@ -3046,9 +3309,21 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('project', 'sname', [
         op('join', '', [rel('Student'), op('select', "grade = 'A'", [rel('Enrolled')])])
-      ])
+      ]),
+      sql: {
+        tip: 'Careful: a student with two As joins twice and SQL keeps both rows. <b>DISTINCT</b> is how you ask for each name once — the algebra did that for you.',
+        focus: ['DISTINCT'],
+        hints: [
+          'Join Student to Enrolled, then filter on the grade.',
+          'Nia has two As, so she comes back twice.',
+          "SELECT DISTINCT sname FROM Student NATURAL JOIN Enrolled WHERE grade = 'A'"
+        ],
+        solution: 'SELECT DISTINCT sname\n' +
+                  'FROM Student NATURAL JOIN Enrolled\n' +
+                  "WHERE grade = 'A'"
+      }
     },
-    {
+{
       db: 'company',
       chapter: 'Products and division',
       title: 'Comparing a table to itself',
@@ -3069,9 +3344,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             op('rename', 'B', [rel('Employee')])
           ])
         ])
-      ])
+      ]),
+      sql: {
+        tip: 'Naming a table twice in FROM is ρ and × together: <b>Employee A, Employee B</b> hands you two independent copies to compare.',
+        hints: [
+          'FROM Employee A, Employee B gives every possible pairing.',
+          'A.eid < B.eid drops the self-pairs and keeps each real pair once.',
+          'SELECT A.ename, B.ename FROM Employee A, Employee B WHERE A.dept = B.dept AND A.eid < B.eid'
+        ],
+        solution: 'SELECT A.ename, B.ename\n' +
+                  'FROM Employee A, Employee B\n' +
+                  'WHERE A.dept = B.dept AND A.eid < B.eid'
+      }
     },
-    {
+{
       db: 'company',
       title: 'For all',
       question: 'Return the ids of employees who work on <i>every</i> project.',
@@ -3086,9 +3372,26 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       solution: op('divide', '', [
         op('project', 'eid, pid', [rel('WorksOn')]),
         op('project', 'pid', [rel('Project')])
-      ])
+      ]),
+      sql: {
+        tip: 'SQL has no ÷. “Works on every project” becomes “there is <i>no</i> project they do <i>not</i> work on”: one NOT EXISTS inside another.',
+        focus: ['EXISTS', 'NOT EXISTS'],
+        hints: [
+          'Work from the outside in: for each employee, go looking for a counterexample.',
+          'The counterexample is a project with no matching WorksOn row for that employee.',
+          'NOT EXISTS (SELECT * FROM Project P WHERE NOT EXISTS (SELECT * FROM WorksOn W2 WHERE W2.eid = W1.eid AND W2.pid = P.pid))',
+          'Counting says it too: GROUP BY eid HAVING COUNT(DISTINCT pid) = (SELECT COUNT(*) FROM Project).'
+        ],
+        solution: 'SELECT DISTINCT eid\n' +
+                  'FROM WorksOn W1\n' +
+                  'WHERE NOT EXISTS (\n' +
+                  '  SELECT * FROM Project P\n' +
+                  '  WHERE NOT EXISTS (\n' +
+                  '    SELECT * FROM WorksOn W2\n' +
+                  '    WHERE W2.eid = W1.eid AND W2.pid = P.pid))'
+      }
     },
-    {
+{
       db: 'school',
       title: 'Every course in a department',
       question: 'Return the names of students who have taken every CS course.',
@@ -3107,9 +3410,25 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             op('project', 'cid', [op('select', "cdept = 'CS'", [rel('Course')])])
           ])
         ])
-      ])
+      ]),
+      sql: {
+        tip: 'The same double negative, one level harder: the inner query only has to range over the CS courses.',
+        hints: [
+          'Outer query over Student, so every student gets asked the question.',
+          'The counterexample is a CS course with no enrolment row for that student.',
+          "SELECT DISTINCT sname FROM Student S WHERE NOT EXISTS (SELECT * FROM Course C WHERE C.cdept = 'CS' AND NOT EXISTS (SELECT * FROM Enrolled E WHERE E.sid = S.sid AND E.cid = C.cid))"
+        ],
+        solution: 'SELECT DISTINCT sname\n' +
+                  'FROM Student S\n' +
+                  'WHERE NOT EXISTS (\n' +
+                  '  SELECT * FROM Course C\n' +
+                  "  WHERE C.cdept = 'CS'\n" +
+                  '    AND NOT EXISTS (\n' +
+                  '      SELECT * FROM Enrolled E\n' +
+                  '      WHERE E.sid = S.sid AND E.cid = C.cid))'
+      }
     },
-    {
+{
       db: 'company',
       chapter: 'Advanced',
       title: 'Matchmaking',
@@ -3126,9 +3445,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('project', 'Department.dept, ename', [
         op('join', 'head = eid', [rel('Department'), rel('Employee')])
-      ])
+      ]),
+      sql: {
+        tip: '<b>JOIN ... ON</b> is the theta join: you say which columns have to match, because the ones that should are not named the same.',
+        focus: ['JOIN', 'ON'],
+        hints: [
+          'The condition is head = eid.',
+          'Both tables have a dept column, so dept on its own is ambiguous — qualify it.',
+          'SELECT Department.dept, ename FROM Department JOIN Employee ON head = eid'
+        ],
+        solution: 'SELECT Department.dept, ename\n' +
+                  'FROM Department JOIN Employee ON head = eid'
+      }
     },
-    {
+{
       db: 'school',
       title: 'Nobody signed up',
       question: 'Return the id and title of every course that no student is enrolled in.',
@@ -3148,9 +3478,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             op('project', 'cid', [rel('Enrolled')])
           ])
         ])
-      ])
+      ]),
+      sql: {
+        tip: '<b>NOT IN</b> with a subquery is the everyday spelling of −, and it keeps the other columns of Course within reach.',
+        hints: [
+          'Ask Course for the rows whose cid is nowhere in Enrolled.',
+          'SELECT cid, title FROM Course WHERE cid NOT IN (SELECT cid FROM Enrolled)',
+          'NOT EXISTS says the same thing, correlated: WHERE NOT EXISTS (SELECT * FROM Enrolled E WHERE E.cid = Course.cid).'
+        ],
+        solution: 'SELECT cid, title\n' +
+                  'FROM Course\n' +
+                  'WHERE cid NOT IN (SELECT cid FROM Enrolled)'
+      }
     },
-    {
+{
       db: 'company',
       title: 'At least two',
       question: 'Return the ids of employees who work on at least two different projects.',
@@ -3169,9 +3510,21 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             op('rename', 'B', [rel('WorksOn')])
           ])
         ])
-      ])
+      ]),
+      sql: {
+        tip: 'Two rows of one table, side by side, is still how you say “at least two”. SQL has a shortcut as well — it is in the last hint.',
+        hints: [
+          'Pair WorksOn with itself, matching on the employee.',
+          'A.pid < B.pid forces the two rows to be different projects, and counts each pair once.',
+          'SELECT DISTINCT A.eid FROM WorksOn A, WorksOn B WHERE A.eid = B.eid AND A.pid < B.pid',
+          'The shortcut: SELECT eid FROM WorksOn GROUP BY eid HAVING COUNT(*) >= 2. Either answer is accepted.'
+        ],
+        solution: 'SELECT DISTINCT A.eid\n' +
+                  'FROM WorksOn A, WorksOn B\n' +
+                  'WHERE A.eid = B.eid AND A.pid < B.pid'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Exactly one',
       question: 'Return the ids of employees who work on exactly one project.',
@@ -3194,9 +3547,23 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             ])
           ])
         ])
-      ])
+      ]),
+      sql: {
+        tip: '“Exactly one” is “at least one, minus at least two” — the same subtraction as in the algebra.',
+        hints: [
+          'You already have the “at least two” query from the last level.',
+          'Subtract it from everyone who appears in WorksOn at all.',
+          'SELECT eid FROM WorksOn EXCEPT SELECT A.eid FROM WorksOn A, WorksOn B WHERE A.eid = B.eid AND A.pid < B.pid',
+          'Or in one breath: GROUP BY eid HAVING COUNT(*) = 1.'
+        ],
+        solution: 'SELECT eid FROM WorksOn\n' +
+                  'EXCEPT\n' +
+                  'SELECT A.eid\n' +
+                  'FROM WorksOn A, WorksOn B\n' +
+                  'WHERE A.eid = B.eid AND A.pid < B.pid'
+      }
     },
-    {
+{
       db: 'company',
       title: 'The biggest one',
       question: 'Return the id of the highest-paid employee, without using aggregation.',
@@ -3221,9 +3588,23 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             ])
           ])
         ])
-      ])
+      ]),
+      sql: {
+        question: 'Return the id of the highest-paid employee — without using MAX.',
+        tip: '“The largest” without an aggregate is “nobody beats me”: there is no row with a bigger salary. MAX, which you meet in the aggregation chapter, is this in one word.',
+        hints: [
+          'For each employee, go looking for somebody who earns more.',
+          'If that search comes back empty, you have found your answer.',
+          'SELECT eid FROM Employee A WHERE NOT EXISTS (SELECT * FROM Employee B WHERE B.salary > A.salary)'
+        ],
+        solution: 'SELECT eid\n' +
+                  'FROM Employee A\n' +
+                  'WHERE NOT EXISTS (\n' +
+                  '  SELECT * FROM Employee B\n' +
+                  '  WHERE B.salary > A.salary)'
+      }
     },
-    {
+{
       db: 'school',
       title: 'Nothing but',
       question: 'Return the names of students who are enrolled only in CS courses ' +
@@ -3246,9 +3627,22 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             ])
           ])
         ])
-      ])
+      ]),
+      sql: {
+        tip: '“Only CS” is “enrolled in something, and enrolled in nothing that is not CS”. The join gives you the first half, the NOT EXISTS the second.',
+        hints: [
+          'Start from students who are enrolled in at least one course.',
+          'Then rule out anyone with an enrolment in a course from another department.',
+          "SELECT DISTINCT sname FROM Student S NATURAL JOIN Enrolled WHERE NOT EXISTS (SELECT * FROM Enrolled E NATURAL JOIN Course C WHERE E.sid = S.sid AND C.cdept <> 'CS')"
+        ],
+        solution: 'SELECT DISTINCT sname\n' +
+                  'FROM Student S NATURAL JOIN Enrolled\n' +
+                  'WHERE NOT EXISTS (\n' +
+                  '  SELECT * FROM Enrolled E NATURAL JOIN Course C\n' +
+                  "  WHERE E.sid = S.sid AND C.cdept <> 'CS')"
+      }
     },
-    {
+{
       db: 'company',
       title: 'Keeping up with Cleo',
       question: 'Return the ids of employees who work on every project that Cleo (E3) works on.',
@@ -3262,9 +3656,25 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       solution: op('divide', '', [
         op('project', 'eid, pid', [rel('WorksOn')]),
         op('project', 'pid', [op('select', "eid = 'E3'", [rel('WorksOn')])])
-      ])
+      ]),
+      sql: {
+        tip: 'Division by a derived set: the middle query no longer ranges over a whole table, but over Cleo’s projects.',
+        hints: [
+          "The set to cover is “the projects where C.eid = 'E3'”.",
+          'Everything else is the same double negative as before.',
+          "SELECT DISTINCT eid FROM WorksOn W1 WHERE NOT EXISTS (SELECT * FROM WorksOn C WHERE C.eid = 'E3' AND NOT EXISTS (SELECT * FROM WorksOn W2 WHERE W2.eid = W1.eid AND W2.pid = C.pid))"
+        ],
+        solution: 'SELECT DISTINCT eid\n' +
+                  'FROM WorksOn W1\n' +
+                  'WHERE NOT EXISTS (\n' +
+                  '  SELECT * FROM WorksOn C\n' +
+                  "  WHERE C.eid = 'E3'\n" +
+                  '    AND NOT EXISTS (\n' +
+                  '      SELECT * FROM WorksOn W2\n' +
+                  '      WHERE W2.eid = W1.eid AND W2.pid = C.pid))'
+      }
     },
-    {
+{
       db: 'company',
       title: 'True of everyone',
       question: 'Return the departments in which <i>every</i> employee earns more than 55000.',
@@ -3279,9 +3689,21 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       solution: op('difference', '', [
         op('project', 'dept', [rel('Employee')]),
         op('project', 'dept', [op('select', 'salary <= 55000', [rel('Employee')])])
-      ])
+      ]),
+      sql: {
+        tip: '“Everyone earns more than X” is “nobody earns X or less”. Subtracting the departments with a counterexample is the shortest way to say it.',
+        hints: [
+          'Which departments contain somebody earning 55000 or less?',
+          'Subtract those from all the departments.',
+          'SELECT dept FROM Employee EXCEPT SELECT dept FROM Employee WHERE salary <= 55000',
+          'Grouping says it in one query: GROUP BY dept HAVING MIN(salary) > 55000.'
+        ],
+        solution: 'SELECT dept FROM Employee\n' +
+                  'EXCEPT\n' +
+                  'SELECT dept FROM Employee WHERE salary <= 55000'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Everything at once',
       question: 'Return the names of employees who earn less than 90000 and work on ' +
@@ -3306,9 +3728,26 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
             ])
           ])
         ])
-      ])
+      ]),
+      sql: {
+        tip: 'Everything at once: an ordinary condition next to a universally quantified one, in the same WHERE.',
+        hints: [
+          'The salary test is an ordinary comparison; AND it onto the hard part.',
+          'The hard part is level 15 again, with the projects narrowed to the expensive ones.',
+          'SELECT DISTINCT ename FROM Employee E WHERE salary < 90000 AND NOT EXISTS (SELECT * FROM Project P WHERE P.budget > 100000 AND NOT EXISTS (SELECT * FROM WorksOn W WHERE W.eid = E.eid AND W.pid = P.pid))'
+        ],
+        solution: 'SELECT DISTINCT ename\n' +
+                  'FROM Employee E\n' +
+                  'WHERE salary < 90000\n' +
+                  '  AND NOT EXISTS (\n' +
+                  '    SELECT * FROM Project P\n' +
+                  '    WHERE P.budget > 100000\n' +
+                  '      AND NOT EXISTS (\n' +
+                  '        SELECT * FROM WorksOn W\n' +
+                  '        WHERE W.eid = E.eid AND W.pid = P.pid))'
+      }
     },
-    {
+{
       db: 'company',
       chapter: 'Aggregation',
       title: 'How many?',
@@ -3321,9 +3760,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'Write COUNT(eid) in the right-hand box, and leave the left one empty.',
         'ℱ<sub>COUNT(eid)</sub>(Employee)'
       ],
-      solution: op('group', 'COUNT(eid)', [rel('Employee')], '')
+      solution: op('group', 'COUNT(eid)', [rel('Employee')], ''),
+      sql: {
+        tip: '<b>COUNT(*)</b> counts rows. With no GROUP BY the whole table is a single group, so exactly one row comes back.',
+        focus: ['COUNT'],
+        hints: [
+          'No WHERE, no GROUP BY — just the count.',
+          'SELECT COUNT(*) FROM Employee',
+          'COUNT(eid) counts the same thing here: one value per row.'
+        ],
+        solution: 'SELECT COUNT(*)\n' +
+                  'FROM Employee'
+      }
     },
-    {
+{
       db: 'company',
       title: 'How many each?',
       question: 'Return the number of employees in each department.',
@@ -3335,9 +3785,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'The result has one row per department, with the count beside it.',
         '<sub>dept</sub>ℱ<sub>COUNT(eid)</sub>(Employee)'
       ],
-      solution: op('group', 'COUNT(eid)', [rel('Employee')], 'dept')
+      solution: op('group', 'COUNT(eid)', [rel('Employee')], 'dept'),
+      sql: {
+        tip: '<b>GROUP BY</b> is the subscript on the left of ℱ: one row per distinct value, with the aggregate worked out inside each group.',
+        focus: ['GROUP BY'],
+        hints: [
+          'Group by the department, count the rows in each group.',
+          'SELECT dept, COUNT(*) FROM Employee GROUP BY dept'
+        ],
+        solution: 'SELECT dept, COUNT(*)\n' +
+                  'FROM Employee\n' +
+                  'GROUP BY dept'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Two at a time',
       question: 'Return the lowest and the highest salary in the company, in one row.',
@@ -3348,9 +3809,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'No grouping attribute — you want a single row for the whole company.',
         'ℱ<sub>MIN(salary), MAX(salary)</sub>(Employee)'
       ],
-      solution: op('group', 'MIN(salary), MAX(salary)', [rel('Employee')], '')
+      solution: op('group', 'MIN(salary), MAX(salary)', [rel('Employee')], ''),
+      sql: {
+        tip: 'Several aggregates can share one query, and with no GROUP BY they all describe the same single group.',
+        focus: ['MIN', 'MAX'],
+        hints: [
+          'Two functions in one SELECT list.',
+          'SELECT MIN(salary), MAX(salary) FROM Employee'
+        ],
+        solution: 'SELECT MIN(salary), MAX(salary)\n' +
+                  'FROM Employee'
+      }
     },
-    {
+{
       db: 'company',
       title: 'On average',
       question: 'Return the average salary of each department.',
@@ -3360,9 +3831,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'Group by dept, and AVG the salary.',
         '<sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee)'
       ],
-      solution: op('group', 'AVG(salary)', [rel('Employee')], 'dept')
+      solution: op('group', 'AVG(salary)', [rel('Employee')], 'dept'),
+      sql: {
+        tip: 'Same shape as the count, a different function.',
+        focus: ['AVG'],
+        hints: [
+          'SELECT dept, AVG(salary) … GROUP BY dept'
+        ],
+        solution: 'SELECT dept, AVG(salary)\n' +
+                  'FROM Employee\n' +
+                  'GROUP BY dept'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Filtering the groups',
       question: 'Return the departments that have more than two employees.',
@@ -3377,9 +3858,22 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('project', 'dept', [
         op('select', 'COUNT_eid > 2', [op('group', 'COUNT(eid)', [rel('Employee')], 'dept')])
-      ])
+      ]),
+      sql: {
+        tip: '<b>HAVING</b> filters groups the way WHERE filters rows, and it is the one place a condition may contain an aggregate.',
+        focus: ['HAVING'],
+        hints: [
+          'Group by dept first.',
+          'The condition is about the group, not about one employee, so WHERE cannot have it.',
+          'SELECT dept FROM Employee GROUP BY dept HAVING COUNT(*) > 2'
+        ],
+        solution: 'SELECT dept\n' +
+                  'FROM Employee\n' +
+                  'GROUP BY dept\n' +
+                  'HAVING COUNT(*) > 2'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Summing across a join',
       question: 'Return each employee name with the total number of hours they are billed for.',
@@ -3392,9 +3886,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('group', 'SUM(hours)', [
         op('join', '', [rel('Employee'), rel('WorksOn')])
-      ], 'ename')
+      ], 'ename'),
+      sql: {
+        tip: 'Join first, group second: the rows being grouped can come from anywhere.',
+        focus: ['SUM'],
+        hints: [
+          'Join Employee to WorksOn so the names and the hours are in one row.',
+          'SELECT ename, SUM(hours) FROM Employee NATURAL JOIN WorksOn GROUP BY ename'
+        ],
+        solution: 'SELECT ename, SUM(hours)\n' +
+                  'FROM Employee NATURAL JOIN WorksOn\n' +
+                  'GROUP BY ename'
+      }
     },
-    {
+{
       db: 'school',
       title: 'Enrolment counts',
       question: 'Return each course title together with the number of students enrolled in it.',
@@ -3408,9 +3913,21 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('project', 'title, COUNT_sid', [
         op('join', '', [rel('Course'), op('group', 'COUNT(sid)', [rel('Enrolled')], 'cid')])
-      ])
+      ]),
+      sql: {
+        tip: 'The join happens before the grouping, so you can group by a column that came from the other table.',
+        hints: [
+          'Join Course to Enrolled, then group.',
+          'SELECT title, COUNT(*) FROM Course NATURAL JOIN Enrolled GROUP BY title',
+          'Topology never appears: an inner join has nothing to say about a course nobody took.',
+          'Grouping by cid, title would be safer in general — two courses could share a title.'
+        ],
+        solution: 'SELECT title, COUNT(*)\n' +
+                  'FROM Course NATURAL JOIN Enrolled\n' +
+                  'GROUP BY title'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Two numbers at once',
       question: 'Return, for each department, how many employees it has and what they earn on average.',
@@ -3421,9 +3938,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         'One ℱ does all of it — no need for two queries joined together.',
         '<sub>dept</sub>ℱ<sub>COUNT(eid), AVG(salary)</sub>(Employee)'
       ],
-      solution: op('group', 'COUNT(eid), AVG(salary)', [rel('Employee')], 'dept')
+      solution: op('group', 'COUNT(eid), AVG(salary)', [rel('Employee')], 'dept'),
+      sql: {
+        tip: 'One pass over the groups can answer several questions at once.',
+        hints: [
+          'Both functions go in the same SELECT list.',
+          'SELECT dept, COUNT(*), AVG(salary) FROM Employee GROUP BY dept'
+        ],
+        solution: 'SELECT dept, COUNT(*), AVG(salary)\n' +
+                  'FROM Employee\n' +
+                  'GROUP BY dept'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Before or after',
       question: 'Return the average salary of the under-40s in each department.',
@@ -3438,9 +3965,21 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('group', 'AVG(salary)', [
         op('select', 'age < 40', [rel('Employee')])
-      ], 'dept')
+      ], 'dept'),
+      sql: {
+        tip: 'WHERE runs before the grouping, HAVING after. This filter is about a person, not a department, so it is WHERE.',
+        hints: [
+          'Throw the over-40s out before the groups are formed.',
+          'SELECT dept, AVG(salary) FROM Employee WHERE age < 40 GROUP BY dept',
+          'Putting it in HAVING would be a type error: age belongs to a row, not to a group.'
+        ],
+        solution: 'SELECT dept, AVG(salary)\n' +
+                  'FROM Employee\n' +
+                  'WHERE age < 40\n' +
+                  'GROUP BY dept'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Busy people',
       question: 'Return the names of employees billed for more than 20 hours in total across all ' +
@@ -3457,9 +3996,21 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
         op('select', 'SUM_hours > 20', [
           op('group', 'SUM(hours)', [op('join', '', [rel('Employee'), rel('WorksOn')])], 'ename')
         ])
-      ])
+      ]),
+      sql: {
+        tip: 'Join, group, then filter the groups — and unlike the algebra you do not have to give the sum a name to test it.',
+        hints: [
+          'Group the joined rows by name.',
+          'The total is a property of the group, so the test goes in HAVING.',
+          'SELECT ename FROM Employee NATURAL JOIN WorksOn GROUP BY ename HAVING SUM(hours) > 20'
+        ],
+        solution: 'SELECT ename\n' +
+                  'FROM Employee NATURAL JOIN WorksOn\n' +
+                  'GROUP BY ename\n' +
+                  'HAVING SUM(hours) > 20'
+      }
     },
-    {
+{
       db: 'school',
       title: 'Course load',
       question: 'Return each student’s name together with the number of courses they are enrolled in.',
@@ -3472,9 +4023,19 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       ],
       solution: op('project', 'sname, COUNT_cid', [
         op('join', '', [rel('Student'), op('group', 'COUNT(cid)', [rel('Enrolled')], 'sid')])
-      ])
+      ]),
+      sql: {
+        tip: 'The mirror image of the enrolment counts: same join, grouped the other way round.',
+        hints: [
+          'Group by the student this time.',
+          'SELECT sname, COUNT(*) FROM Student NATURAL JOIN Enrolled GROUP BY sname'
+        ],
+        solution: 'SELECT sname, COUNT(*)\n' +
+                  'FROM Student NATURAL JOIN Enrolled\n' +
+                  'GROUP BY sname'
+      }
     },
-    {
+{
       db: 'company',
       title: 'Final exam',
       question: 'Return each department together with the name of its highest-paid employee.',
@@ -3493,7 +4054,127 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
           rel('Employee'),
           op('rename', '(dept, salary)', [op('group', 'MAX(salary)', [rel('Employee')], 'dept')])
         ])
-      ])
+      ]),
+      sql: {
+        tip: 'A subquery returning one value can be used as a value. Correlate it with the outer row — E2.dept = E.dept — and it means “the best in <i>my</i> department”.',
+        hints: [
+          'A group is not a row in SQL either: MAX(salary) gives you the number, not the person.',
+          'So ask, of each employee, whether their salary is the best in their own department.',
+          'SELECT dept, ename FROM Employee E WHERE salary = (SELECT MAX(salary) FROM Employee E2 WHERE E2.dept = E.dept)',
+          'The algebra route also works: group, then join the result back to Employee.'
+        ],
+        solution: 'SELECT dept, ename\n' +
+                  'FROM Employee E\n' +
+                  'WHERE salary = (\n' +
+                  '  SELECT MAX(salary) FROM Employee E2\n' +
+                  '  WHERE E2.dept = E.dept)'
+      }
+    },
+    {
+      db: 'company',
+      chapter: 'SQL only',
+      title: 'Duplicates',
+      question: 'Return the department of every employee — one row per employee, repeats and all. Seven employees, seven rows.',
+      raNote: 'π throws duplicates away, so in the algebra this question has no answer.',
+      sql: {
+        tip: 'A relation is a <i>set</i>, so π would collapse the repeats. A SQL table is a bag and keeps them: DISTINCT is opt-in, and this is the level where you leave it out.',
+        hints: [
+          'This is the shortest query in the game.',
+          'SELECT dept FROM Employee'
+        ],
+        solution: 'SELECT dept\n' +
+                  'FROM Employee'
+      }
+    },
+    {
+      db: 'company',
+      title: 'In order',
+      question: 'Return every employee name and salary, best-paid first.',
+      raNote: 'A relation has no row order at all — there is nothing in the algebra for ORDER BY to do.',
+      sql: {
+        tip: '<b>ORDER BY</b> sorts the answer, and here the order <i>is</i> part of the answer: this level checks the rows in the order you return them.',
+        focus: ['ORDER BY'],
+        ordered: true,
+        hints: [
+          'ORDER BY comes last.',
+          'DESC turns the sort around.',
+          'SELECT ename, salary FROM Employee ORDER BY salary DESC'
+        ],
+        solution: 'SELECT ename, salary\n' +
+                  'FROM Employee\n' +
+                  'ORDER BY salary DESC'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Top three',
+      question: 'Return the names of the three highest-paid employees, best-paid first.',
+      raNote: '“The first three” needs an order, and the algebra has none.',
+      sql: {
+        tip: '<b>LIMIT</b> cuts the answer short. Sort first — LIMIT without ORDER BY gives you three arbitrary rows.',
+        focus: ['LIMIT'],
+        ordered: true,
+        hints: [
+          'Same sort as last time.',
+          'Then keep only the first three.',
+          'SELECT ename FROM Employee ORDER BY salary DESC LIMIT 3'
+        ],
+        solution: 'SELECT ename\n' +
+                  'FROM Employee\n' +
+                  'ORDER BY salary DESC\n' +
+                  'LIMIT 3'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Computed columns',
+      question: 'Return each employee’s name, and their salary in thousands in a column named <b>k</b>.',
+      raNote: 'π can only keep or drop columns — it cannot compute a new one.',
+      checkNames: true,
+      sql: {
+        tip: 'A SELECT item can be an expression, not just a column name, and <b>AS</b> says what to call the result.',
+        hints: [
+          'Divide the salary by 1000 in the SELECT list.',
+          'SELECT ename, salary / 1000 AS k FROM Employee'
+        ],
+        solution: 'SELECT ename, salary / 1000 AS k\n' +
+                  'FROM Employee'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Counting different things',
+      question: 'Return how many different departments have at least one employee in them.',
+      raNote: 'Counting needs ℱ, and ℱ has no DISTINCT inside it.',
+      sql: {
+        tip: '<b>COUNT(DISTINCT x)</b> counts values rather than rows — the difference between “how many employees” and “how many departments”.',
+        focus: ['DISTINCT', 'COUNT'],
+        hints: [
+          'COUNT(*) would answer a different question: how many employees there are.',
+          'SELECT COUNT(DISTINCT dept) FROM Employee'
+        ],
+        solution: 'SELECT COUNT(DISTINCT dept)\n' +
+                  'FROM Employee'
+      }
+    },
+    {
+      db: 'company',
+      title: 'The busiest department',
+      question: 'Return each department with its headcount, biggest first, with ties broken by department name.',
+      raNote: 'Same reason as before: the algebra cannot order its rows.',
+      sql: {
+        tip: 'ORDER BY can sort by an aggregate. Give the aggregate a name with AS and the sort can use it.',
+        ordered: true,
+        hints: [
+          'Group and count first — you have written that query already.',
+          'Then sort by the count, descending, and by dept to break the ties.',
+          'SELECT dept, COUNT(*) AS n FROM Employee GROUP BY dept ORDER BY n DESC, dept'
+        ],
+        solution: 'SELECT dept, COUNT(*) AS n\n' +
+                  'FROM Employee\n' +
+                  'GROUP BY dept\n' +
+                  'ORDER BY n DESC, dept'
+      }
     }
   ];
 
@@ -3506,20 +4187,23 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 (function () {
   'use strict';
 
-  var RA = window.RA, GAME = window.GAME;
+  var RA = window.RA, SQL = window.SQL, GAME = window.GAME;
   var LEVELS = GAME.LEVELS, DATABASES = GAME.DATABASES, OPS = RA.OPS;
   var STORE_KEY = 'relational-algebra-game-v1';
   var MAX_PREVIEW_ROWS = 40;
 
   var state = {
     levelIndex: 0,
+    mode: 'ra',          // 'ra' = build an expression, 'sql' = write a query
     tree: null,
+    sql: '',
     hintsShown: 0,
     usedHelp: false,
-    solved: {},          // levelIndex -> 'gold' | 'silver'
+    solved: { ra: {}, sql: {} },   // mode -> levelIndex -> 'gold' | 'silver'
     armed: null,         // {kind:'op'|'rel', value:string} for click-to-place
     barOpen: true,       // is the level bar expanded?
-    resultOpen: true     // show the live result, or work blind?
+    resultOpen: true,    // show the live result, or work blind?
+    peekOpen: false      // show the algebra query rendered as SQL?
   };
 
   var el = {};
@@ -3529,20 +4213,28 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   function load() {
     try {
       var saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-      if (saved && saved.solved) state.solved = saved.solved;
+      if (saved && saved.solved) {
+        // Progress used to be one flat map, from before there was a second
+        // language to solve a level in; those stars were all algebra.
+        var flat = Object.keys(saved.solved).every(function (k) { return typeof saved.solved[k] === 'string'; });
+        state.solved = flat ? { ra: saved.solved, sql: {} }
+                            : { ra: saved.solved.ra || {}, sql: saved.solved.sql || {} };
+      }
       if (typeof saved.levelIndex === 'number') {
         state.levelIndex = Math.min(Math.max(saved.levelIndex, 0), LEVELS.length - 1);
       }
+      if (saved.mode === 'ra' || saved.mode === 'sql') state.mode = saved.mode;
       if (typeof saved.barOpen === 'boolean') state.barOpen = saved.barOpen;
       if (typeof saved.resultOpen === 'boolean') state.resultOpen = saved.resultOpen;
+      if (typeof saved.peekOpen === 'boolean') state.peekOpen = saved.peekOpen;
     } catch (e) { /* fresh start */ }
   }
 
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        solved: state.solved, levelIndex: state.levelIndex,
-        barOpen: state.barOpen, resultOpen: state.resultOpen
+        solved: state.solved, levelIndex: state.levelIndex, mode: state.mode,
+        barOpen: state.barOpen, resultOpen: state.resultOpen, peekOpen: state.peekOpen
       }));
     } catch (e) { /* private mode: progress simply will not persist */ }
   }
@@ -3550,6 +4242,33 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   /* ---------- helpers ---------- */
 
   function level() { return LEVELS[state.levelIndex]; }
+
+  /* Not every question can be asked in both languages: ORDER BY has no algebra,
+     and a level may have no SQL form worth writing. */
+  function has(lv, mode) { return mode === 'sql' ? !!lv.sql : !!lv.solution; }
+
+  function otherMode() { return state.mode === 'sql' ? 'ra' : 'sql'; }
+  function modeName(mode) { return mode === 'sql' ? 'SQL' : 'the algebra'; }
+  function solvedIn(mode) { return state.solved[mode] || (state.solved[mode] = {}); }
+
+  function countIn(mode) {
+    return LEVELS.filter(function (lv, i) { return has(lv, mode) && solvedIn(mode)[i]; }).length;
+  }
+  function totalIn(mode) {
+    return LEVELS.filter(function (lv) { return has(lv, mode); }).length;
+  }
+
+  /* The question, tip, hints and palette highlights as the current language
+     tells them. The level's own fields are the algebra's. */
+  function view() {
+    var lv = level();
+    if (state.mode === 'sql') {
+      var sql = lv.sql || {};
+      return { question: sql.question || lv.question, tip: sql.tip || lv.tip,
+               hints: sql.hints || [], focus: sql.focus || [] };
+    }
+    return { question: lv.question, tip: lv.tip, hints: lv.hints || [], focus: lv.focus || [] };
+  }
 
   function currentDB() {
     var db = {};
@@ -3658,13 +4377,17 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
   function renderTables() {
     var info = DATABASES[level().db];
+    // In SQL mode there is no canvas to drag onto, so a card is a click that
+    // types the table's name for you.
+    var isSQL = state.mode === 'sql';
     el.dbName.textContent = info.label;
     el.dbBlurb.textContent = info.blurb;
     el.tables.innerHTML = info.relations.map(function (r) {
       return '<div class="table-card">' +
-        '<div class="table-head" draggable="true" data-rel="' + esc(r.name) + '" ' +
-             'title="Drag me into the query canvas">' +
-          '<span class="grip">⠿</span><span class="rel-name">' + esc(r.name) + '</span>' +
+        '<div class="table-head" draggable="' + (isSQL ? 'false' : 'true') + '" data-rel="' + esc(r.name) + '" ' +
+             'title="' + (isSQL ? 'Click to put this table in the query' : 'Drag me into the query canvas') + '">' +
+          '<span class="grip">' + (isSQL ? '▦' : '⠿') + '</span>' +
+          '<span class="rel-name">' + esc(r.name) + '</span>' +
           '<span class="rel-meta">' + r.rows.length + ' rows</span>' +
         '</div>' +
         '<div class="table-body">' + tableHTML(r, { all: true }) + '</div>' +
@@ -3677,15 +4400,51 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       });
       head.addEventListener('dragend', endDrag);
       head.addEventListener('click', function () {
-        arm({ kind: 'rel', value: head.dataset.rel }, head);
+        if (state.mode === 'sql') insertIntoSQL(head.dataset.rel);
+        else arm({ kind: 'rel', value: head.dataset.rel }, head);
       });
     });
   }
 
   /* ---------- rendering: palette ---------- */
 
+  function renderTools() {
+    var isSQL = state.mode === 'sql';
+    el.opBlock.hidden = isSQL;
+    el.clauseBlock.hidden = !isSQL;
+    if (isSQL) renderClauses();
+    else renderPalette();
+  }
+
+  function renderClauses() {
+    var focus = view().focus || [];
+    el.clauses.innerHTML = SQL.CLAUSES.map(function (c, i) {
+      var isNew = focus.indexOf(c.word) !== -1;
+      return '<button class="op-chip clause-chip clause-' + c.kind + (isNew ? ' is-new' : '') + '" ' +
+        'type="button" data-i="' + i + '" title="' + esc(c.word + ' — ' + c.hint) + '">' +
+        '<span class="clause-word">' + esc(c.word) + '</span>' +
+        (isNew ? '<span class="op-badge">new</span>' : '') +
+      '</button>';
+    }).join('');
+
+    el.clauses.querySelectorAll('.clause-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        insertIntoSQL(SQL.CLAUSES[parseInt(chip.dataset.i, 10)].insert);
+      });
+    });
+  }
+
+  function insertIntoSQL(text) {
+    var input = el.sqlInput;
+    var at = input.selectionStart, end = input.selectionEnd;
+    input.value = input.value.slice(0, at) + text + input.value.slice(end);
+    input.setSelectionRange(at + text.length, at + text.length);
+    input.focus();
+    onSqlInput({ noSuggest: true });
+  }
+
   function renderPalette() {
-    var focus = level().focus || [];
+    var focus = view().focus || [];
     el.palette.innerHTML = Object.keys(OPS).map(function (key) {
       var meta = OPS[key];
       var isNew = focus.indexOf(key) !== -1;
@@ -3903,7 +4662,10 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
              symbol: c.insert[0], hint: OPS[opName].hint };
   });
 
-  var suggest = { items: [], index: 0, open: false };
+  // One menu, two editors: the expression box and the SQL box each describe
+  // how to find their caret and what to offer there.
+  var surfaces = {};
+  var suggest = { items: [], index: 0, open: false, surface: null, wordStart: 0 };
 
   // Inside {...} or [...] you are writing a parameter, so offer attributes.
   function inParameter(text, caret) {
@@ -3915,77 +4677,111 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     return depth > 0;
   }
 
-  function currentWord() {
-    var caret = el.exprInput.selectionStart;
-    var m = /[A-Za-z_][A-Za-z0-9_.]*$/.exec(el.exprInput.value.slice(0, caret));
+  function currentWord(input) {
+    var caret = input.selectionStart;
+    var m = /[A-Za-z_][A-Za-z0-9_.]*$/.exec(input.value.slice(0, caret));
     return { text: m ? m[0] : '', start: m ? caret - m[0].length : caret, caret: caret };
   }
 
-  function candidates(prefix, inParam) {
-    var info = DATABASES[level().db];
-    var list = [];
-    if (inParam) {
-      ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'].forEach(function (fn) {
-        list.push({ kind: 'fn', word: fn, insert: fn + '()', caret: fn.length + 1,
-                    symbol: 'ƒ', hint: 'aggregate function' });
-      });
-      var seen = {};
-      info.relations.forEach(function (r) {
-        r.attrs.forEach(function (a) {
-          if (seen[a]) return;
-          seen[a] = true;
-          list.push({ kind: 'attr', word: a, insert: a, symbol: '·', hint: 'attribute of ' + r.name });
-        });
-      });
-    } else {
-      list = COMPLETIONS.concat(info.relations.map(function (r) {
-        return { kind: 'rel', word: r.name, insert: r.name, symbol: '▦',
-                 hint: r.attrs.join(', ') };
-      }));
-    }
+  function byPrefix(list, prefix) {
     var low = prefix.toLowerCase();
     return list.filter(function (c) {
       return c.word.toLowerCase().indexOf(low) === 0 && c.word.toLowerCase() !== low;
     }).slice(0, 8);
   }
 
-  function caretPixels(index) {
-    el.exprMirror.textContent = el.exprInput.value.slice(0, index);
-    return el.exprMirror.offsetWidth;
+  function relationItems() {
+    return DATABASES[level().db].relations.map(function (r) {
+      return { kind: 'rel', word: r.name, insert: r.name, symbol: '▦', hint: r.attrs.join(', ') };
+    });
   }
 
-  function openSuggest() {
-    var word = currentWord();
+  function attributeItems(noun) {
+    var seen = {}, list = [];
+    DATABASES[level().db].relations.forEach(function (r) {
+      r.attrs.forEach(function (a) {
+        if (seen[a]) return;
+        seen[a] = true;
+        list.push({ kind: 'attr', word: a, insert: a, symbol: '·', hint: noun + ' of ' + r.name });
+      });
+    });
+    return list;
+  }
+
+  function raCandidates(prefix, input) {
+    if (inParameter(input.value, input.selectionStart)) {
+      var fns = ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'].map(function (fn) {
+        return { kind: 'fn', word: fn, insert: fn + '()', caret: fn.length + 1,
+                 symbol: 'ƒ', hint: 'aggregate function' };
+      });
+      return byPrefix(fns.concat(attributeItems('attribute')), prefix);
+    }
+    return byPrefix(COMPLETIONS.concat(relationItems()), prefix);
+  }
+
+  function sqlCandidates(prefix) {
+    var clauses = SQL.CLAUSES.map(function (c) {
+      return { kind: 'kw', word: c.word, insert: c.insert, symbol: '⌘', hint: c.hint };
+    });
+    return byPrefix(clauses.concat(relationItems(), attributeItems('column')), prefix);
+  }
+
+  /* One line of text: the menu opens under the word, measured with a hidden
+     copy of everything before it. */
+  function placeInline(surface, wordStart) {
+    surface.mirror.textContent = surface.input.value.slice(0, wordStart);
+    var left = Math.max(0, surface.mirror.offsetWidth - surface.input.scrollLeft);
+    surface.menu.style.left = Math.min(left, surface.input.clientWidth - 120) + 'px';
+    surface.mirror.textContent = '';
+  }
+
+  /* Several lines of text: the same trick, but the marker has to be measured in
+     two dimensions. */
+  function placeBlock(surface, wordStart) {
+    var mirror = surface.mirror;
+    mirror.textContent = surface.input.value.slice(0, wordStart);
+    var marker = document.createElement('span');
+    marker.textContent = '\u200b';
+    mirror.appendChild(marker);
+    var x = marker.offsetLeft, y = marker.offsetTop + marker.offsetHeight;
+    mirror.textContent = '';
+    surface.menu.style.left = Math.max(0, Math.min(x, surface.input.clientWidth - 150)) + 'px';
+    surface.menu.style.top = (y - surface.input.scrollTop + 4) + 'px';
+  }
+
+  function openSuggest(surface) {
+    var word = currentWord(surface.input);
     if (!word.text) return closeSuggest();
-    var items = candidates(word.text, inParameter(el.exprInput.value, word.caret));
+    var items = surface.candidates(word.text, surface.input);
     if (!items.length) return closeSuggest();
 
     suggest.items = items;
     suggest.index = 0;
     suggest.open = true;
+    suggest.surface = surface;
     suggest.wordStart = word.start;
     renderSuggest();
-    var left = Math.max(0, caretPixels(word.start) - el.exprInput.scrollLeft);
-    el.exprSuggest.style.left = Math.min(left, el.exprInput.clientWidth - 120) + 'px';
-    el.exprSuggest.hidden = false;
-    el.exprInput.setAttribute('aria-expanded', 'true');
+    surface.place(surface, word.start);
+    surface.menu.hidden = false;
+    surface.input.setAttribute('aria-expanded', 'true');
   }
 
   function closeSuggest() {
     suggest.open = false;
-    el.exprSuggest.hidden = true;
-    el.exprInput.setAttribute('aria-expanded', 'false');
+    [el.exprSuggest, el.sqlSuggest].forEach(function (menu) { menu.hidden = true; });
+    [el.exprInput, el.sqlInput].forEach(function (input) { input.setAttribute('aria-expanded', 'false'); });
   }
 
   function renderSuggest() {
-    el.exprSuggest.innerHTML = suggest.items.map(function (c, i) {
+    var menu = suggest.surface.menu;
+    menu.innerHTML = suggest.items.map(function (c, i) {
       return '<li class="suggest-item' + (i === suggest.index ? ' active' : '') + '" data-i="' + i +
         '" role="option" aria-selected="' + (i === suggest.index) + '">' +
         '<span class="s-sym s-' + c.kind + '">' + esc(c.symbol) + '</span>' +
         '<span class="s-word">' + esc(c.word) + '</span>' +
         '<span class="s-hint">' + esc(c.hint) + '</span></li>';
     }).join('');
-    el.exprSuggest.querySelectorAll('.suggest-item').forEach(function (li) {
+    menu.querySelectorAll('.suggest-item').forEach(function (li) {
       // mousedown, not click: a click would blur the input first.
       li.addEventListener('mousedown', function (e) {
         e.preventDefault();
@@ -4000,16 +4796,16 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   }
 
   function accept(item) {
-    if (!item) return;
-    var input = el.exprInput;
-    var word = currentWord();
+    if (!item || !suggest.surface) return;
+    var surface = suggest.surface, input = surface.input;
+    var word = currentWord(input);
     var before = input.value.slice(0, word.start);
     var after = input.value.slice(word.caret);
     input.value = before + item.insert + after;
     var pos = word.start + (item.caret != null ? item.caret : item.insert.length);
     input.setSelectionRange(pos, pos);
     closeSuggest();
-    onExprInput({ noSuggest: true });
+    surface.changed();
   }
 
   /* Tab out of a finished parameter and into the operand that follows:
@@ -4034,6 +4830,11 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     el.exprError.hidden = !msg;
   }
 
+  function setSqlError(msg) {
+    el.sqlError.textContent = msg || '';
+    el.sqlError.hidden = !msg;
+  }
+
   // Typing edits the same tree the canvas does; whichever one you are not
   // touching follows along.
   var errorTimer = null;
@@ -4049,23 +4850,48 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       setExprError('');
       errorTimer = setTimeout(function () { setExprError(e.message); }, 700);
     }
-    if (!(options && options.noSuggest)) openSuggest();
+    if (!(options && options.noSuggest)) openSuggest(surfaces.ra);
   }
 
+  var sqlErrorTimer = null;
+  function onSqlInput(options) {
+    state.sql = el.sqlInput.value;
+    refreshOutput();
+    if (!(options && options.noSuggest)) openSuggest(surfaces.sql);
+  }
+
+  function setSqlText(text) {
+    el.sqlInput.value = text;
+    state.sql = text;
+    try { el.sqlInput.setSelectionRange(text.length, text.length); } catch (e) { /* not focused */ }
+    refreshOutput();
+  }
+
+  function evaluateSQL() {
+    try { return { ok: true, relation: SQL.run(state.sql, currentDB()) }; }
+    catch (e) { return { ok: false, error: e.message }; }
+  }
+
+  function evaluateCurrent() { return state.mode === 'sql' ? evaluateSQL() : evaluateTree(); }
+
   function refreshOutput() {
-    el.formula.innerHTML = RA.toHTML(state.tree);
-    if (document.activeElement !== el.exprInput) {
-      el.exprInput.value = state.tree ? RA.toText(state.tree) : '';
-      setExprError('');
+    if (state.mode === 'ra') {
+      el.formula.innerHTML = RA.toHTML(state.tree);
+      if (document.activeElement !== el.exprInput) {
+        el.exprInput.value = state.tree ? RA.toText(state.tree) : '';
+        setExprError('');
+      }
+      renderPeek();
     }
-    var res = evaluateTree();
+
+    clearTimeout(sqlErrorTimer);
+    setSqlError('');
+    var res = evaluateCurrent();
+
     if (res.ok) {
       // Hidden means hidden: the row count alone gives the game away.
       if (!state.resultOpen) {
-        el.outputMeta.textContent = '';
-        el.output.className = 'output output-muted';
-        el.output.innerHTML = '<p class="placeholder">Result hidden — work it out, then press ' +
-          '<b>Check answer</b>.</p>';
+        muteOutput('Result hidden — work it out, then press <b>Check answer</b>.');
         return;
       }
       el.outputMeta.textContent = res.relation.attrs.length + ' column' +
@@ -4074,14 +4900,63 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
       el.output.className = 'output';
       el.output.innerHTML = tableHTML(res.relation);
     } else if (res.error === 'incomplete') {
-      el.outputMeta.textContent = '';
-      el.output.className = 'output output-muted';
-      el.output.innerHTML = '<p class="placeholder">Fill in the empty slots to see a result.</p>';
+      muteOutput(state.mode === 'sql'
+        ? 'Write a query to see what it returns.'
+        : 'Fill in the empty slots to see a result.');
+    } else if (state.mode === 'sql') {
+      // Half-written SQL is always broken; only complain once you stop typing.
+      muteOutput('This query does not run yet.');
+      sqlErrorTimer = setTimeout(function () { setSqlError(res.error); }, 600);
     } else {
       el.outputMeta.textContent = '';
       el.output.className = 'output output-error';
       el.output.innerHTML = '<p class="error-msg">' + esc(res.error) + '</p>';
     }
+  }
+
+  function muteOutput(html) {
+    el.outputMeta.textContent = '';
+    el.output.className = 'output output-muted';
+    el.output.innerHTML = '<p class="placeholder">' + html + '</p>';
+  }
+
+  /* ---------- the algebra, written out as SQL ---------- */
+
+  var lastPeek = null;
+  var KEYWORD_RE = new RegExp('\\b(' + SQL.KEYWORDS.join('|') + ')\\b', 'g');
+
+  function setPeekOpen(open) {
+    state.peekOpen = open;
+    el.peekToggle.setAttribute('aria-expanded', String(open));
+    el.peekToggle.classList.toggle('collapsed', !open);
+    el.peek.hidden = !open;
+    save();
+    renderPeek();
+  }
+
+  /* Only ever shows SQL that runs and returns the same table: a translation
+     that quietly disagreed with the canvas would teach the wrong lesson. */
+  function renderPeek() {
+    lastPeek = null;
+    el.btnUseSQL.hidden = true;
+    if (!state.peekOpen) return;
+    el.peek.hidden = false;
+
+    var text = null, note = null;
+    try {
+      var expected = RA.evaluate(state.tree, currentDB());
+      text = SQL.fromTree(state.tree, currentDB());
+      if (text && !RA.compare(SQL.run(text, currentDB()), expected, {}).ok) text = null;
+      if (!text) note = 'This one has no tidy SQL translation.';
+    } catch (e) {
+      note = e.message === 'incomplete'
+        ? 'Finish the query and the SQL for it appears here.'
+        : 'The query has to run before it can be translated.';
+    }
+    lastPeek = text;
+    el.peek.classList.toggle('is-muted', !text);
+    el.peek.innerHTML = text ? esc(text).replace(KEYWORD_RE, '<span class="kw">$1</span>') : esc(note);
+    el.btnUseSQL.hidden = !text || !has(level(), 'sql');
   }
 
   /* ---------- feedback ---------- */
@@ -4099,26 +4974,34 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   /* ---------- checking ---------- */
 
   function expectedRelation() {
-    return RA.evaluate(level().solution, currentDB());
+    return state.mode === 'sql'
+      ? SQL.run(level().sql.solution, currentDB())
+      : RA.evaluate(level().solution, currentDB());
+  }
+
+  /* SQL is checked as a list of rows, not a set: duplicates count, and a level
+     that asks for an order is checked in that order. */
+  function checkOptions() {
+    var lv = level();
+    if (state.mode !== 'sql') return { checkNames: !!lv.checkNames };
+    return { checkNames: !!lv.checkNames, multiset: true, ordered: !!lv.sql.ordered };
   }
 
   function check() {
-    var res = evaluateTree();
+    var res = evaluateCurrent();
     if (!res.ok) {
       setFeedback('bad', res.error === 'incomplete'
-        ? 'Your query still has empty slots — fill them in first.'
+        ? (state.mode === 'sql' ? 'There is no query to check yet.'
+                                : 'Your query still has empty slots — fill them in first.')
         : '<b>That query does not run:</b> ' + esc(res.error));
       return;
     }
-    var verdict = RA.compare(res.relation, expectedRelation(), { checkNames: !!level().checkNames });
+    var verdict = RA.compare(res.relation, expectedRelation(), checkOptions());
     if (verdict.ok) {
       var grade = state.usedHelp ? 'silver' : 'gold';
-      if (state.solved[state.levelIndex] !== 'gold') state.solved[state.levelIndex] = grade;
+      if (solvedIn(state.mode)[state.levelIndex] !== 'gold') solvedIn(state.mode)[state.levelIndex] = grade;
       save();
-      setFeedback('good', (grade === 'gold' ? '★ ' : '✓ ') + '<b>Correct!</b> ' +
-        (state.levelIndex + 1 < LEVELS.length
-          ? 'Next up — level ' + (state.levelIndex + 2) + ': ' + esc(LEVELS[state.levelIndex + 1].title) + '.'
-          : 'That was the last level — you have the whole algebra.'));
+      setFeedback('good', (grade === 'gold' ? '★ ' : '✓ ') + '<b>Correct!</b> ' + nextUp());
       celebrate();
       renderPills();
       renderNav();
@@ -4127,8 +5010,22 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     }
   }
 
+  /* After a win: the same question in the other language is the best next
+     thing to do, so offer it before pointing at the next level. */
+  function nextUp() {
+    var other = otherMode();
+    if (has(level(), other) && solvedIn(other)[state.levelIndex] !== 'gold') {
+      return 'The same question works in ' + modeName(other) + ' too.' +
+        '<button class="link-btn" type="button" data-action="switch">Try it ›</button>';
+    }
+    if (state.levelIndex + 1 < LEVELS.length) {
+      return 'Next up — level ' + (state.levelIndex + 2) + ': ' + esc(LEVELS[state.levelIndex + 1].title) + '.';
+    }
+    return 'That was the last level — you have both languages.';
+  }
+
   function showHint() {
-    var hints = level().hints || [];
+    var hints = view().hints;
     if (state.hintsShown >= hints.length) {
       setFeedback('info', 'No hints left — try <b>Show solution</b> to see the finished query.');
       return;
@@ -4141,7 +5038,8 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
   function showSolution() {
     state.usedHelp = true;
-    state.tree = clone(level().solution);
+    if (state.mode === 'sql') setSqlText(level().sql.solution);
+    else state.tree = clone(level().solution);
     render();
     setFeedback('info', 'This is one correct answer. Press <b>Check answer</b> to record it, ' +
       'then try rebuilding it yourself.');
@@ -4153,30 +5051,72 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     if (i < 0 || i >= LEVELS.length) return;
     state.levelIndex = i;
     state.tree = null;
+    state.sql = '';
     state.hintsShown = 0;
-    state.usedHelp = !!state.solved[i] && state.solved[i] === 'silver';
     state.armed = null;
+    // A level the current language cannot ask simply switches language.
+    var switched = false;
+    if (!has(level(), state.mode)) { state.mode = otherMode(); switched = true; }
+    state.usedHelp = solvedIn(state.mode)[i] === 'silver';
+    save();
+    render();
+    clearFeedback();
+    if (switched) {
+      setFeedback('info', 'Level ' + (i + 1) + ' can only be asked in ' + modeName(state.mode) + '.');
+    }
+  }
+
+  function setMode(mode) {
+    if (mode === state.mode || !has(level(), mode)) return;
+    state.mode = mode;
+    state.hintsShown = 0;
+    state.usedHelp = solvedIn(mode)[state.levelIndex] === 'silver';
+    state.armed = null;
+    closeSuggest();
     save();
     render();
     clearFeedback();
   }
 
+  function renderMode() {
+    var lv = level();
+    [['ra', el.modeRA], ['sql', el.modeSQL]].forEach(function (pair) {
+      pair[1].setAttribute('aria-selected', String(state.mode === pair[0]));
+      pair[1].disabled = !has(lv, pair[0]);
+    });
+    el.raSurface.hidden = state.mode !== 'ra';
+    el.sqlSurface.hidden = state.mode !== 'sql';
+    if (el.sqlInput.value !== state.sql) el.sqlInput.value = state.sql;
+
+    var note = '';
+    if (!has(lv, 'ra')) note = '<b>SQL only.</b> ' + esc(lv.raNote || '');
+    else if (!has(lv, 'sql')) note = '<b>Algebra only.</b> ' + esc(lv.sqlNote || '');
+    el.modeNote.innerHTML = note;
+    el.modeNote.hidden = !note;
+  }
+
   function renderPills() {
+    var solved = solvedIn(state.mode);
     el.pills.innerHTML = LEVELS.map(function (lv, i) {
       var cls = 'pill';
+      var available = has(lv, state.mode);
+      if (!available) cls += ' unavailable';
       if (i === state.levelIndex) cls += ' current';
-      if (state.solved[i]) cls += ' solved ' + state.solved[i];
-      var mark = state.solved[i] === 'gold' ? '★' : (state.solved[i] ? '✓' : i + 1);
+      if (solved[i]) cls += ' solved ' + solved[i];
+      var mark = solved[i] === 'gold' ? '★' : (solved[i] ? '✓' : i + 1);
       var heading = lv.chapter ? '<span class="pill-chapter">' + esc(lv.chapter) + '</span>' : '';
       return heading + '<button class="' + cls + '" data-i="' + i + '" title="' +
-        esc((i + 1) + '. ' + lv.title) + '">' + mark + '</button>';
+        esc((i + 1) + '. ' + lv.title + (available ? '' : ' — not available in ' + modeName(state.mode))) +
+        '">' + mark + '</button>';
     }).join('');
     el.pills.querySelectorAll('.pill').forEach(function (p) {
       p.addEventListener('click', function () { goToLevel(parseInt(p.dataset.i, 10)); });
     });
 
-    var solvedCount = Object.keys(state.solved).length;
-    el.progress.textContent = solvedCount + ' / ' + LEVELS.length + ' solved';
+    el.progress.innerHTML = ['ra', 'sql'].map(function (mode) {
+      return '<span class="' + (mode === state.mode ? 'now' : '') + '">' +
+        countIn(mode) + ' / ' + totalIn(mode) + ' ' + (mode === 'sql' ? 'SQL' : 'algebra') + '</span>';
+    }).join('<span class="sep">·</span>');
     el.barNow.textContent = (state.levelIndex + 1) + ' · ' + level().title;
   }
 
@@ -4200,12 +5140,12 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   }
 
   function renderQuestion() {
-    var lv = level();
+    var lv = level(), shown = view();
     el.levelLabel.textContent = 'Level ' + (state.levelIndex + 1) + ' of ' + LEVELS.length;
     el.levelTitle.textContent = lv.title;
-    el.question.innerHTML = lv.question;
-    if (lv.tip) {
-      el.tip.innerHTML = lv.tip;
+    el.question.innerHTML = shown.question;
+    if (shown.tip) {
+      el.tip.innerHTML = shown.tip;
       el.tip.hidden = false;
     } else {
       el.tip.hidden = true;
@@ -4215,19 +5155,20 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
   function renderNav() {
     el.prev.disabled = state.levelIndex === 0;
     el.next.disabled = state.levelIndex >= LEVELS.length - 1;
-    var hints = level().hints || [];
+    var hints = view().hints;
     el.hint.disabled = false;
     el.hint.textContent = state.hintsShown >= hints.length ? 'No hints left' : 'Hint (' +
       (hints.length - state.hintsShown) + ')';
   }
 
   function render() {
+    renderMode();
     renderQuestion();
     renderPills();
     renderNav();
     renderTables();
-    renderPalette();
-    renderTree();
+    renderTools();
+    if (state.mode === 'ra') renderTree();
     updateArmedUI();
     refreshOutput();
   }
@@ -4277,14 +5218,66 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
 
   function init() {
     ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
-     'tables', 'palette', 'canvas', 'formula', 'exprInput', 'exprError',
-     'exprSuggest', 'exprMirror',
+     'tables', 'opBlock', 'palette', 'clauseBlock', 'clauses',
+     'modeRA', 'modeSQL', 'modeNote', 'raSurface', 'sqlSurface',
+     'canvas', 'formula', 'exprInput', 'exprError', 'exprSuggest', 'exprMirror',
+     'sqlInput', 'sqlError', 'sqlSuggest', 'sqlMirror',
+     'peekToggle', 'peek', 'btnUseSQL',
      'output', 'outputMeta', 'resultToggle', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
     el.prev = document.getElementById('btnPrev');
     el.next = document.getElementById('btnNext');
     el.hint = document.getElementById('btnHint');
+
+    surfaces.ra = {
+      input: el.exprInput, menu: el.exprSuggest, mirror: el.exprMirror,
+      candidates: raCandidates, place: placeInline,
+      changed: function () { onExprInput({ noSuggest: true }); }
+    };
+    surfaces.sql = {
+      input: el.sqlInput, menu: el.sqlSuggest, mirror: el.sqlMirror,
+      candidates: sqlCandidates, place: placeBlock,
+      changed: function () { onSqlInput({ noSuggest: true }); }
+    };
+
+    el.modeRA.addEventListener('click', function () { setMode('ra'); });
+    el.modeSQL.addEventListener('click', function () { setMode('sql'); });
+    el.peekToggle.addEventListener('click', function () { setPeekOpen(!state.peekOpen); });
+    el.btnUseSQL.addEventListener('click', function () {
+      var text = lastPeek;
+      if (!text) return;
+      setMode('sql');
+      setSqlText(text);
+      state.usedHelp = true;          // translating your own answer is still a leg-up
+      setFeedback('info', 'Your algebra, written out as SQL. Read it, then press <b>Check answer</b>.');
+    });
+    el.feedback.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
+      if (btn && btn.dataset.action === 'switch') setMode(otherMode());
+    });
+
+    el.sqlInput.addEventListener('input', function () { onSqlInput(); });
+    el.sqlInput.addEventListener('blur', function () {
+      closeSuggest();
+      clearTimeout(sqlErrorTimer);
+      var res = evaluateSQL();
+      setSqlError(res.ok || res.error === 'incomplete' ? '' : res.error);
+    });
+    el.sqlInput.addEventListener('keydown', function (e) {
+      if (suggest.open) {
+        if (e.key === 'Tab' || e.key === 'Enter') {
+          e.preventDefault();
+          accept(suggest.items[suggest.index]);
+          return;
+        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveSuggest(1); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); moveSuggest(-1); return; }
+        if (e.key === 'Escape') { e.preventDefault(); closeSuggest(); return; }
+      }
+      // A query is several lines, so Enter belongs to the text: ⌘/Ctrl checks.
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); check(); }
+    });
 
     el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
     el.resultToggle.addEventListener('click', function () { setResultOpen(!state.resultOpen); });
@@ -4322,7 +5315,9 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     document.getElementById('btnCheck').addEventListener('click', check);
     document.getElementById('btnClear').addEventListener('click', function () {
       state.tree = null;
+      state.sql = '';
       state.armed = null;
+      setSqlError('');
       render();
       clearFeedback();
     });
@@ -4332,11 +5327,13 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     el.next.addEventListener('click', function () { goToLevel(state.levelIndex + 1); });
     document.getElementById('btnReset').addEventListener('click', function () {
       if (!confirm('Reset all progress and start from level 1?')) return;
-      state.solved = {};
+      state.solved = { ra: {}, sql: {} };
       state.levelIndex = 0;
       state.usedHelp = false;
       state.hintsShown = 0;
       state.tree = null;
+      state.sql = '';
+      if (!has(level(), state.mode)) state.mode = otherMode();
       save();
       render();
       clearFeedback();
@@ -4348,9 +5345,11 @@ code { font-family: var(--mono); background: var(--bg-inset); padding: 1px 5px; 
     document.body.addEventListener('dragend', endDrag);
 
     load();
-    state.usedHelp = state.solved[state.levelIndex] === 'silver';
+    if (!has(level(), state.mode)) state.mode = otherMode();
+    state.usedHelp = solvedIn(state.mode)[state.levelIndex] === 'silver';
     setBarOpen(state.barOpen);
     setResultOpen(state.resultOpen);
+    setPeekOpen(state.peekOpen);
     render();
   }
 

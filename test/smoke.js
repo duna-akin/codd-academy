@@ -34,8 +34,12 @@ JSDOM.fromFile(path, {
   click(pills[pills.length - 1]);
   console.log('jump  :', text('#levelLabel'), '(from a fresh profile, nothing solved)');
   if (!text('#levelLabel').includes('Level ' + LEVELS.length)) errors.push('could not jump to the last level');
+  const jumpedToSQL = $('#sqlSurface') && !$('#sqlSurface').hidden;   // the last level is SQL only
   click(doc.querySelectorAll('.pill')[0]);
   if (!text('#levelLabel').includes('Level 1')) errors.push('could not jump back to level 1');
+  console.log('switch:', 'the last level switched the language =', jumpedToSQL);
+  if (!jumpedToSQL) errors.push('a SQL-only level should switch the language on its own');
+  click($('#modeRA'));                                   // the sections below are about the algebra
 
   // 0b. The level bar collapses, expands, and remembers which it was.
   const bar = $('#levelbar'), toggle = $('#barToggle');
@@ -234,26 +238,144 @@ JSDOM.fromFile(path, {
     errors.push('reopening the result should bring the table back');
   }
 
-  // The walk below assumes it starts at level 1.
+  // 9. The other language: the same questions, answered in SQL.
   click(doc.querySelectorAll('.pill')[0]);
+  click($('#modeSQL'));
+  const sql = $('#sqlInput');
+  const typeSql = t => { sql.value = t; sql.dispatchEvent(new window.Event('input', { bubbles: true })); };
+  console.log('sqlmode:', 'algebra surface hidden =', $('#raSurface').hidden,
+              '| clause chips =', doc.querySelectorAll('.clause-chip').length,
+              '| question =', JSON.stringify(text('#question').slice(0, 44)));
+  if (!$('#raSurface').hidden || $('#sqlSurface').hidden) errors.push('the SQL switch did not swap the editors');
+  if (!doc.querySelectorAll('.clause-chip').length) errors.push('no clause palette in SQL mode');
 
+  typeSql('SELECT * FROM Employee');
+  console.log('sqlrun :', doc.querySelectorAll('#output thead th').length, 'columns,',
+              doc.querySelectorAll('#output tbody tr').length, 'rows');
+  click($('#btnCheck'));
+  console.log('sqlchk1:', text('#feedback').trim());
+  if (!/Correct/.test(text('#feedback'))) errors.push('a correct SQL answer was rejected');
+
+  // Clicking a clause drops it in at the cursor.
+  click($('#btnClear'));
+  click(doc.querySelector('.clause-chip'));
+  console.log('clause :', JSON.stringify(sql.value));
+  if (sql.value !== 'SELECT ') errors.push('clicking a clause chip did not insert it');
+
+  // SQL keeps duplicate rows, and the check says so.
+  click(doc.querySelectorAll('.pill')[12]);              // level 13: A new database
+  typeSql("SELECT sname FROM Student NATURAL JOIN Enrolled WHERE grade = 'A'");
+  click($('#btnCheck'));
+  const dupes = text('#feedback').trim();
+  typeSql("SELECT DISTINCT sname FROM Student NATURAL JOIN Enrolled WHERE grade = 'A'");
+  click($('#btnCheck'));
+  console.log('dupes  :', dupes);
+  if (!/DISTINCT/.test(dupes)) errors.push('a duplicate-row answer was not explained');
+  if (!/Correct/.test(text('#feedback'))) errors.push('the DISTINCT answer was rejected');
+
+  // Broken SQL stays quiet until you stop typing, then explains itself.
+  typeSql('SELECT FROM');
+  const sqlQuiet = $('#sqlError').hidden;
+  await sleep(800);
+  console.log('sqlerr :', text('#sqlError'), '| silent while typing =', sqlQuiet);
+  if (!sqlQuiet || $('#sqlError').hidden) errors.push('SQL errors should wait for a pause, then appear');
+
+  // Tab completion knows clauses, tables and columns.
+  click($('#btnClear'));
+  const sqlMenu = $('#sqlSuggest');
+  const sqlShown = () => sqlMenu.hidden ? '(closed)'
+    : [...sqlMenu.querySelectorAll('.s-word')].map(n => n.textContent).join(', ');
+  const sqlType = t => {
+    const at = sql.selectionStart;
+    sql.value = sql.value.slice(0, at) + t + sql.value.slice(at);
+    sql.setSelectionRange(at + t.length, at + t.length);
+    sql.dispatchEvent(new window.Event('input', { bubbles: true }));
+  };
+  const sqlKey = k => {
+    const e = new window.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ctrlKey: k === 'CtrlEnter' });
+    sql.dispatchEvent(k === 'CtrlEnter'
+      ? new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ctrlKey: true })
+      : e);
+  };
+  sql.focus();
+  sqlType('sel');
+  const kwMenu = sqlShown();
+  sqlKey('Tab');
+  sqlType('sna');
+  const colMenu = sqlShown();
+  sqlKey('Tab');
+  sqlType(' fro');
+  sqlKey('Tab');
+  sqlType('Stu');
+  const tableMenu = sqlShown();
+  sqlKey('Tab');
+  console.log('sqlmenu:', 'after "sel" =', kwMenu, '| after "sna" =', colMenu, '| after "Stu" =', tableMenu);
+  console.log('sqltab :', JSON.stringify(sql.value));
+  if (sql.value !== 'SELECT sname FROM Student') errors.push('tab completion did not write the SQL query');
+  sqlKey('CtrlEnter');
+  console.log('ctrl+↵ :', text('#feedback').trim().slice(0, 60));
+  if (!/Not quite|Correct/.test(text('#feedback'))) errors.push('Ctrl+Enter did not check the answer');
+  sql.blur();
+
+  // A SQL-only level cannot be asked in the algebra, and says so.
+  click(doc.querySelectorAll('.pill')[0]);
+  click($('#modeRA'));
+  click(doc.querySelectorAll('.pill')[38]);             // level 39: In order
+  console.log('sqlonly:', text('#modeNote').trim().slice(0, 60), '| algebra disabled =', $('#modeRA').disabled);
+  if (!$('#modeRA').disabled || $('#modeNote').hidden) errors.push('a SQL-only level should disable the algebra');
+  typeSql('SELECT ename, salary FROM Employee ORDER BY salary');
+  click($('#btnCheck'));
+  const unordered = text('#feedback').trim();
+  typeSql('SELECT ename, salary FROM Employee ORDER BY salary DESC');
+  click($('#btnCheck'));
+  console.log('ordered:', unordered);
+  if (!/order/.test(unordered)) errors.push('row order should be checked on an ORDER BY level');
+  if (!/Correct/.test(text('#feedback'))) errors.push('the ordered answer was rejected');
+
+  // 10. The algebra you built, written out as SQL.
+  click(doc.querySelectorAll('.pill')[3]);              // level 4: Filter, then project
+  click($('#modeRA'));
+  click($('#peekToggle'));
+  expr.focus();
+  expr.value = 'π_{ename}(σ_{salary > 60000}(Employee))';
+  expr.dispatchEvent(new window.Event('input', { bubbles: true }));
+  expr.blur();
+  console.log('peek   :', JSON.stringify(text('#peek')));
+  if (!/SELECT DISTINCT ename/.test(text('#peek'))) errors.push('the SQL translation did not appear');
+  click($('#btnUseSQL'));
+  click($('#btnCheck'));
+  console.log('usesql :', $('#sqlSurface').hidden ? '(still in algebra)' : text('#feedback').trim());
+  if ($('#sqlSurface').hidden || !/Correct/.test(text('#feedback'))) {
+    errors.push('carrying the translated query into the SQL box did not work');
+  }
+
+  // 11. Every level, in every language it can be asked in.
   let failed = 0;
-  for (let i = 0; i < LEVELS.length; i++) {
-    click($('#btnClear'));
-    click($('#btnSolution'));
-    click($('#btnCheck'));
-    const fb = text('#feedback').trim();
-    const ok = /Correct/.test(fb);
-    if (!ok) { failed++; console.log('  L' + (i + 1) + ' FAIL: ' + fb); }
-    if (i < LEVELS.length - 1) {
-      click($('#btnNext'));
-      if (!text('#levelLabel').includes('Level ' + (i + 2))) {
-        failed++; console.log('  nav FAIL at ' + (i + 1) + ': ' + text('#levelLabel'));
+  for (const mode of ['ra', 'sql']) {
+    const button = mode === 'sql' ? '#modeSQL' : '#modeRA';
+    click(doc.querySelectorAll('.pill')[0]);
+    click($(button));
+    let walked = 0;
+    for (let i = 0; i < LEVELS.length; i++) {
+      if (mode === 'sql' ? !!LEVELS[i].sql : !!LEVELS[i].solution) {
+        click($(button));                 // a single-language level may have switched us
+        click($('#btnClear'));
+        click($('#btnSolution'));
+        click($('#btnCheck'));
+        const fb = text('#feedback').trim();
+        if (!/Correct/.test(fb)) { failed++; console.log('  ' + mode + ' L' + (i + 1) + ' FAIL: ' + fb); }
+        walked++;
+      }
+      if (i < LEVELS.length - 1) {
+        click($('#btnNext'));
+        if (!text('#levelLabel').includes('Level ' + (i + 2))) {
+          failed++; console.log('  nav FAIL at ' + (i + 1) + ': ' + text('#levelLabel'));
+        }
       }
     }
+    console.log('levels :', walked + ' solved through the UI in ' + (mode === 'sql' ? 'SQL' : 'the algebra'));
   }
-  console.log('levels:', LEVELS.length - failed + '/' + LEVELS.length, 'solved through the UI');
-  console.log('pills :', text('#progress'));
+  console.log('pills  :', text('#progress').replace(/\s+/g, ' '));
   console.log('errors:', errors.length ? errors : 'none');
   if (failed || errors.length) { console.log('\nSMOKE TEST FAILED'); process.exit(1); }
   console.log('\nSMOKE TEST PASSED');

@@ -2,20 +2,23 @@
 (function () {
   'use strict';
 
-  var RA = window.RA, GAME = window.GAME;
+  var RA = window.RA, SQL = window.SQL, GAME = window.GAME;
   var LEVELS = GAME.LEVELS, DATABASES = GAME.DATABASES, OPS = RA.OPS;
   var STORE_KEY = 'relational-algebra-game-v1';
   var MAX_PREVIEW_ROWS = 40;
 
   var state = {
     levelIndex: 0,
+    mode: 'ra',          // 'ra' = build an expression, 'sql' = write a query
     tree: null,
+    sql: '',
     hintsShown: 0,
     usedHelp: false,
-    solved: {},          // levelIndex -> 'gold' | 'silver'
+    solved: { ra: {}, sql: {} },   // mode -> levelIndex -> 'gold' | 'silver'
     armed: null,         // {kind:'op'|'rel', value:string} for click-to-place
     barOpen: true,       // is the level bar expanded?
-    resultOpen: true     // show the live result, or work blind?
+    resultOpen: true,    // show the live result, or work blind?
+    peekOpen: false      // show the algebra query rendered as SQL?
   };
 
   var el = {};
@@ -25,20 +28,28 @@
   function load() {
     try {
       var saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-      if (saved && saved.solved) state.solved = saved.solved;
+      if (saved && saved.solved) {
+        // Progress used to be one flat map, from before there was a second
+        // language to solve a level in; those stars were all algebra.
+        var flat = Object.keys(saved.solved).every(function (k) { return typeof saved.solved[k] === 'string'; });
+        state.solved = flat ? { ra: saved.solved, sql: {} }
+                            : { ra: saved.solved.ra || {}, sql: saved.solved.sql || {} };
+      }
       if (typeof saved.levelIndex === 'number') {
         state.levelIndex = Math.min(Math.max(saved.levelIndex, 0), LEVELS.length - 1);
       }
+      if (saved.mode === 'ra' || saved.mode === 'sql') state.mode = saved.mode;
       if (typeof saved.barOpen === 'boolean') state.barOpen = saved.barOpen;
       if (typeof saved.resultOpen === 'boolean') state.resultOpen = saved.resultOpen;
+      if (typeof saved.peekOpen === 'boolean') state.peekOpen = saved.peekOpen;
     } catch (e) { /* fresh start */ }
   }
 
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        solved: state.solved, levelIndex: state.levelIndex,
-        barOpen: state.barOpen, resultOpen: state.resultOpen
+        solved: state.solved, levelIndex: state.levelIndex, mode: state.mode,
+        barOpen: state.barOpen, resultOpen: state.resultOpen, peekOpen: state.peekOpen
       }));
     } catch (e) { /* private mode: progress simply will not persist */ }
   }
@@ -46,6 +57,33 @@
   /* ---------- helpers ---------- */
 
   function level() { return LEVELS[state.levelIndex]; }
+
+  /* Not every question can be asked in both languages: ORDER BY has no algebra,
+     and a level may have no SQL form worth writing. */
+  function has(lv, mode) { return mode === 'sql' ? !!lv.sql : !!lv.solution; }
+
+  function otherMode() { return state.mode === 'sql' ? 'ra' : 'sql'; }
+  function modeName(mode) { return mode === 'sql' ? 'SQL' : 'the algebra'; }
+  function solvedIn(mode) { return state.solved[mode] || (state.solved[mode] = {}); }
+
+  function countIn(mode) {
+    return LEVELS.filter(function (lv, i) { return has(lv, mode) && solvedIn(mode)[i]; }).length;
+  }
+  function totalIn(mode) {
+    return LEVELS.filter(function (lv) { return has(lv, mode); }).length;
+  }
+
+  /* The question, tip, hints and palette highlights as the current language
+     tells them. The level's own fields are the algebra's. */
+  function view() {
+    var lv = level();
+    if (state.mode === 'sql') {
+      var sql = lv.sql || {};
+      return { question: sql.question || lv.question, tip: sql.tip || lv.tip,
+               hints: sql.hints || [], focus: sql.focus || [] };
+    }
+    return { question: lv.question, tip: lv.tip, hints: lv.hints || [], focus: lv.focus || [] };
+  }
 
   function currentDB() {
     var db = {};
@@ -154,13 +192,17 @@
 
   function renderTables() {
     var info = DATABASES[level().db];
+    // In SQL mode there is no canvas to drag onto, so a card is a click that
+    // types the table's name for you.
+    var isSQL = state.mode === 'sql';
     el.dbName.textContent = info.label;
     el.dbBlurb.textContent = info.blurb;
     el.tables.innerHTML = info.relations.map(function (r) {
       return '<div class="table-card">' +
-        '<div class="table-head" draggable="true" data-rel="' + esc(r.name) + '" ' +
-             'title="Drag me into the query canvas">' +
-          '<span class="grip">⠿</span><span class="rel-name">' + esc(r.name) + '</span>' +
+        '<div class="table-head" draggable="' + (isSQL ? 'false' : 'true') + '" data-rel="' + esc(r.name) + '" ' +
+             'title="' + (isSQL ? 'Click to put this table in the query' : 'Drag me into the query canvas') + '">' +
+          '<span class="grip">' + (isSQL ? '▦' : '⠿') + '</span>' +
+          '<span class="rel-name">' + esc(r.name) + '</span>' +
           '<span class="rel-meta">' + r.rows.length + ' rows</span>' +
         '</div>' +
         '<div class="table-body">' + tableHTML(r, { all: true }) + '</div>' +
@@ -173,15 +215,51 @@
       });
       head.addEventListener('dragend', endDrag);
       head.addEventListener('click', function () {
-        arm({ kind: 'rel', value: head.dataset.rel }, head);
+        if (state.mode === 'sql') insertIntoSQL(head.dataset.rel);
+        else arm({ kind: 'rel', value: head.dataset.rel }, head);
       });
     });
   }
 
   /* ---------- rendering: palette ---------- */
 
+  function renderTools() {
+    var isSQL = state.mode === 'sql';
+    el.opBlock.hidden = isSQL;
+    el.clauseBlock.hidden = !isSQL;
+    if (isSQL) renderClauses();
+    else renderPalette();
+  }
+
+  function renderClauses() {
+    var focus = view().focus || [];
+    el.clauses.innerHTML = SQL.CLAUSES.map(function (c, i) {
+      var isNew = focus.indexOf(c.word) !== -1;
+      return '<button class="op-chip clause-chip clause-' + c.kind + (isNew ? ' is-new' : '') + '" ' +
+        'type="button" data-i="' + i + '" title="' + esc(c.word + ' — ' + c.hint) + '">' +
+        '<span class="clause-word">' + esc(c.word) + '</span>' +
+        (isNew ? '<span class="op-badge">new</span>' : '') +
+      '</button>';
+    }).join('');
+
+    el.clauses.querySelectorAll('.clause-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        insertIntoSQL(SQL.CLAUSES[parseInt(chip.dataset.i, 10)].insert);
+      });
+    });
+  }
+
+  function insertIntoSQL(text) {
+    var input = el.sqlInput;
+    var at = input.selectionStart, end = input.selectionEnd;
+    input.value = input.value.slice(0, at) + text + input.value.slice(end);
+    input.setSelectionRange(at + text.length, at + text.length);
+    input.focus();
+    onSqlInput({ noSuggest: true });
+  }
+
   function renderPalette() {
-    var focus = level().focus || [];
+    var focus = view().focus || [];
     el.palette.innerHTML = Object.keys(OPS).map(function (key) {
       var meta = OPS[key];
       var isNew = focus.indexOf(key) !== -1;
@@ -399,7 +477,10 @@
              symbol: c.insert[0], hint: OPS[opName].hint };
   });
 
-  var suggest = { items: [], index: 0, open: false };
+  // One menu, two editors: the expression box and the SQL box each describe
+  // how to find their caret and what to offer there.
+  var surfaces = {};
+  var suggest = { items: [], index: 0, open: false, surface: null, wordStart: 0 };
 
   // Inside {...} or [...] you are writing a parameter, so offer attributes.
   function inParameter(text, caret) {
@@ -411,77 +492,111 @@
     return depth > 0;
   }
 
-  function currentWord() {
-    var caret = el.exprInput.selectionStart;
-    var m = /[A-Za-z_][A-Za-z0-9_.]*$/.exec(el.exprInput.value.slice(0, caret));
+  function currentWord(input) {
+    var caret = input.selectionStart;
+    var m = /[A-Za-z_][A-Za-z0-9_.]*$/.exec(input.value.slice(0, caret));
     return { text: m ? m[0] : '', start: m ? caret - m[0].length : caret, caret: caret };
   }
 
-  function candidates(prefix, inParam) {
-    var info = DATABASES[level().db];
-    var list = [];
-    if (inParam) {
-      ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'].forEach(function (fn) {
-        list.push({ kind: 'fn', word: fn, insert: fn + '()', caret: fn.length + 1,
-                    symbol: 'ƒ', hint: 'aggregate function' });
-      });
-      var seen = {};
-      info.relations.forEach(function (r) {
-        r.attrs.forEach(function (a) {
-          if (seen[a]) return;
-          seen[a] = true;
-          list.push({ kind: 'attr', word: a, insert: a, symbol: '·', hint: 'attribute of ' + r.name });
-        });
-      });
-    } else {
-      list = COMPLETIONS.concat(info.relations.map(function (r) {
-        return { kind: 'rel', word: r.name, insert: r.name, symbol: '▦',
-                 hint: r.attrs.join(', ') };
-      }));
-    }
+  function byPrefix(list, prefix) {
     var low = prefix.toLowerCase();
     return list.filter(function (c) {
       return c.word.toLowerCase().indexOf(low) === 0 && c.word.toLowerCase() !== low;
     }).slice(0, 8);
   }
 
-  function caretPixels(index) {
-    el.exprMirror.textContent = el.exprInput.value.slice(0, index);
-    return el.exprMirror.offsetWidth;
+  function relationItems() {
+    return DATABASES[level().db].relations.map(function (r) {
+      return { kind: 'rel', word: r.name, insert: r.name, symbol: '▦', hint: r.attrs.join(', ') };
+    });
   }
 
-  function openSuggest() {
-    var word = currentWord();
+  function attributeItems(noun) {
+    var seen = {}, list = [];
+    DATABASES[level().db].relations.forEach(function (r) {
+      r.attrs.forEach(function (a) {
+        if (seen[a]) return;
+        seen[a] = true;
+        list.push({ kind: 'attr', word: a, insert: a, symbol: '·', hint: noun + ' of ' + r.name });
+      });
+    });
+    return list;
+  }
+
+  function raCandidates(prefix, input) {
+    if (inParameter(input.value, input.selectionStart)) {
+      var fns = ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'].map(function (fn) {
+        return { kind: 'fn', word: fn, insert: fn + '()', caret: fn.length + 1,
+                 symbol: 'ƒ', hint: 'aggregate function' };
+      });
+      return byPrefix(fns.concat(attributeItems('attribute')), prefix);
+    }
+    return byPrefix(COMPLETIONS.concat(relationItems()), prefix);
+  }
+
+  function sqlCandidates(prefix) {
+    var clauses = SQL.CLAUSES.map(function (c) {
+      return { kind: 'kw', word: c.word, insert: c.insert, symbol: '⌘', hint: c.hint };
+    });
+    return byPrefix(clauses.concat(relationItems(), attributeItems('column')), prefix);
+  }
+
+  /* One line of text: the menu opens under the word, measured with a hidden
+     copy of everything before it. */
+  function placeInline(surface, wordStart) {
+    surface.mirror.textContent = surface.input.value.slice(0, wordStart);
+    var left = Math.max(0, surface.mirror.offsetWidth - surface.input.scrollLeft);
+    surface.menu.style.left = Math.min(left, surface.input.clientWidth - 120) + 'px';
+    surface.mirror.textContent = '';
+  }
+
+  /* Several lines of text: the same trick, but the marker has to be measured in
+     two dimensions. */
+  function placeBlock(surface, wordStart) {
+    var mirror = surface.mirror;
+    mirror.textContent = surface.input.value.slice(0, wordStart);
+    var marker = document.createElement('span');
+    marker.textContent = '\u200b';
+    mirror.appendChild(marker);
+    var x = marker.offsetLeft, y = marker.offsetTop + marker.offsetHeight;
+    mirror.textContent = '';
+    surface.menu.style.left = Math.max(0, Math.min(x, surface.input.clientWidth - 150)) + 'px';
+    surface.menu.style.top = (y - surface.input.scrollTop + 4) + 'px';
+  }
+
+  function openSuggest(surface) {
+    var word = currentWord(surface.input);
     if (!word.text) return closeSuggest();
-    var items = candidates(word.text, inParameter(el.exprInput.value, word.caret));
+    var items = surface.candidates(word.text, surface.input);
     if (!items.length) return closeSuggest();
 
     suggest.items = items;
     suggest.index = 0;
     suggest.open = true;
+    suggest.surface = surface;
     suggest.wordStart = word.start;
     renderSuggest();
-    var left = Math.max(0, caretPixels(word.start) - el.exprInput.scrollLeft);
-    el.exprSuggest.style.left = Math.min(left, el.exprInput.clientWidth - 120) + 'px';
-    el.exprSuggest.hidden = false;
-    el.exprInput.setAttribute('aria-expanded', 'true');
+    surface.place(surface, word.start);
+    surface.menu.hidden = false;
+    surface.input.setAttribute('aria-expanded', 'true');
   }
 
   function closeSuggest() {
     suggest.open = false;
-    el.exprSuggest.hidden = true;
-    el.exprInput.setAttribute('aria-expanded', 'false');
+    [el.exprSuggest, el.sqlSuggest].forEach(function (menu) { menu.hidden = true; });
+    [el.exprInput, el.sqlInput].forEach(function (input) { input.setAttribute('aria-expanded', 'false'); });
   }
 
   function renderSuggest() {
-    el.exprSuggest.innerHTML = suggest.items.map(function (c, i) {
+    var menu = suggest.surface.menu;
+    menu.innerHTML = suggest.items.map(function (c, i) {
       return '<li class="suggest-item' + (i === suggest.index ? ' active' : '') + '" data-i="' + i +
         '" role="option" aria-selected="' + (i === suggest.index) + '">' +
         '<span class="s-sym s-' + c.kind + '">' + esc(c.symbol) + '</span>' +
         '<span class="s-word">' + esc(c.word) + '</span>' +
         '<span class="s-hint">' + esc(c.hint) + '</span></li>';
     }).join('');
-    el.exprSuggest.querySelectorAll('.suggest-item').forEach(function (li) {
+    menu.querySelectorAll('.suggest-item').forEach(function (li) {
       // mousedown, not click: a click would blur the input first.
       li.addEventListener('mousedown', function (e) {
         e.preventDefault();
@@ -496,16 +611,16 @@
   }
 
   function accept(item) {
-    if (!item) return;
-    var input = el.exprInput;
-    var word = currentWord();
+    if (!item || !suggest.surface) return;
+    var surface = suggest.surface, input = surface.input;
+    var word = currentWord(input);
     var before = input.value.slice(0, word.start);
     var after = input.value.slice(word.caret);
     input.value = before + item.insert + after;
     var pos = word.start + (item.caret != null ? item.caret : item.insert.length);
     input.setSelectionRange(pos, pos);
     closeSuggest();
-    onExprInput({ noSuggest: true });
+    surface.changed();
   }
 
   /* Tab out of a finished parameter and into the operand that follows:
@@ -530,6 +645,11 @@
     el.exprError.hidden = !msg;
   }
 
+  function setSqlError(msg) {
+    el.sqlError.textContent = msg || '';
+    el.sqlError.hidden = !msg;
+  }
+
   // Typing edits the same tree the canvas does; whichever one you are not
   // touching follows along.
   var errorTimer = null;
@@ -545,23 +665,48 @@
       setExprError('');
       errorTimer = setTimeout(function () { setExprError(e.message); }, 700);
     }
-    if (!(options && options.noSuggest)) openSuggest();
+    if (!(options && options.noSuggest)) openSuggest(surfaces.ra);
   }
 
+  var sqlErrorTimer = null;
+  function onSqlInput(options) {
+    state.sql = el.sqlInput.value;
+    refreshOutput();
+    if (!(options && options.noSuggest)) openSuggest(surfaces.sql);
+  }
+
+  function setSqlText(text) {
+    el.sqlInput.value = text;
+    state.sql = text;
+    try { el.sqlInput.setSelectionRange(text.length, text.length); } catch (e) { /* not focused */ }
+    refreshOutput();
+  }
+
+  function evaluateSQL() {
+    try { return { ok: true, relation: SQL.run(state.sql, currentDB()) }; }
+    catch (e) { return { ok: false, error: e.message }; }
+  }
+
+  function evaluateCurrent() { return state.mode === 'sql' ? evaluateSQL() : evaluateTree(); }
+
   function refreshOutput() {
-    el.formula.innerHTML = RA.toHTML(state.tree);
-    if (document.activeElement !== el.exprInput) {
-      el.exprInput.value = state.tree ? RA.toText(state.tree) : '';
-      setExprError('');
+    if (state.mode === 'ra') {
+      el.formula.innerHTML = RA.toHTML(state.tree);
+      if (document.activeElement !== el.exprInput) {
+        el.exprInput.value = state.tree ? RA.toText(state.tree) : '';
+        setExprError('');
+      }
+      renderPeek();
     }
-    var res = evaluateTree();
+
+    clearTimeout(sqlErrorTimer);
+    setSqlError('');
+    var res = evaluateCurrent();
+
     if (res.ok) {
       // Hidden means hidden: the row count alone gives the game away.
       if (!state.resultOpen) {
-        el.outputMeta.textContent = '';
-        el.output.className = 'output output-muted';
-        el.output.innerHTML = '<p class="placeholder">Result hidden — work it out, then press ' +
-          '<b>Check answer</b>.</p>';
+        muteOutput('Result hidden — work it out, then press <b>Check answer</b>.');
         return;
       }
       el.outputMeta.textContent = res.relation.attrs.length + ' column' +
@@ -570,14 +715,63 @@
       el.output.className = 'output';
       el.output.innerHTML = tableHTML(res.relation);
     } else if (res.error === 'incomplete') {
-      el.outputMeta.textContent = '';
-      el.output.className = 'output output-muted';
-      el.output.innerHTML = '<p class="placeholder">Fill in the empty slots to see a result.</p>';
+      muteOutput(state.mode === 'sql'
+        ? 'Write a query to see what it returns.'
+        : 'Fill in the empty slots to see a result.');
+    } else if (state.mode === 'sql') {
+      // Half-written SQL is always broken; only complain once you stop typing.
+      muteOutput('This query does not run yet.');
+      sqlErrorTimer = setTimeout(function () { setSqlError(res.error); }, 600);
     } else {
       el.outputMeta.textContent = '';
       el.output.className = 'output output-error';
       el.output.innerHTML = '<p class="error-msg">' + esc(res.error) + '</p>';
     }
+  }
+
+  function muteOutput(html) {
+    el.outputMeta.textContent = '';
+    el.output.className = 'output output-muted';
+    el.output.innerHTML = '<p class="placeholder">' + html + '</p>';
+  }
+
+  /* ---------- the algebra, written out as SQL ---------- */
+
+  var lastPeek = null;
+  var KEYWORD_RE = new RegExp('\\b(' + SQL.KEYWORDS.join('|') + ')\\b', 'g');
+
+  function setPeekOpen(open) {
+    state.peekOpen = open;
+    el.peekToggle.setAttribute('aria-expanded', String(open));
+    el.peekToggle.classList.toggle('collapsed', !open);
+    el.peek.hidden = !open;
+    save();
+    renderPeek();
+  }
+
+  /* Only ever shows SQL that runs and returns the same table: a translation
+     that quietly disagreed with the canvas would teach the wrong lesson. */
+  function renderPeek() {
+    lastPeek = null;
+    el.btnUseSQL.hidden = true;
+    if (!state.peekOpen) return;
+    el.peek.hidden = false;
+
+    var text = null, note = null;
+    try {
+      var expected = RA.evaluate(state.tree, currentDB());
+      text = SQL.fromTree(state.tree, currentDB());
+      if (text && !RA.compare(SQL.run(text, currentDB()), expected, {}).ok) text = null;
+      if (!text) note = 'This one has no tidy SQL translation.';
+    } catch (e) {
+      note = e.message === 'incomplete'
+        ? 'Finish the query and the SQL for it appears here.'
+        : 'The query has to run before it can be translated.';
+    }
+    lastPeek = text;
+    el.peek.classList.toggle('is-muted', !text);
+    el.peek.innerHTML = text ? esc(text).replace(KEYWORD_RE, '<span class="kw">$1</span>') : esc(note);
+    el.btnUseSQL.hidden = !text || !has(level(), 'sql');
   }
 
   /* ---------- feedback ---------- */
@@ -595,26 +789,34 @@
   /* ---------- checking ---------- */
 
   function expectedRelation() {
-    return RA.evaluate(level().solution, currentDB());
+    return state.mode === 'sql'
+      ? SQL.run(level().sql.solution, currentDB())
+      : RA.evaluate(level().solution, currentDB());
+  }
+
+  /* SQL is checked as a list of rows, not a set: duplicates count, and a level
+     that asks for an order is checked in that order. */
+  function checkOptions() {
+    var lv = level();
+    if (state.mode !== 'sql') return { checkNames: !!lv.checkNames };
+    return { checkNames: !!lv.checkNames, multiset: true, ordered: !!lv.sql.ordered };
   }
 
   function check() {
-    var res = evaluateTree();
+    var res = evaluateCurrent();
     if (!res.ok) {
       setFeedback('bad', res.error === 'incomplete'
-        ? 'Your query still has empty slots — fill them in first.'
+        ? (state.mode === 'sql' ? 'There is no query to check yet.'
+                                : 'Your query still has empty slots — fill them in first.')
         : '<b>That query does not run:</b> ' + esc(res.error));
       return;
     }
-    var verdict = RA.compare(res.relation, expectedRelation(), { checkNames: !!level().checkNames });
+    var verdict = RA.compare(res.relation, expectedRelation(), checkOptions());
     if (verdict.ok) {
       var grade = state.usedHelp ? 'silver' : 'gold';
-      if (state.solved[state.levelIndex] !== 'gold') state.solved[state.levelIndex] = grade;
+      if (solvedIn(state.mode)[state.levelIndex] !== 'gold') solvedIn(state.mode)[state.levelIndex] = grade;
       save();
-      setFeedback('good', (grade === 'gold' ? '★ ' : '✓ ') + '<b>Correct!</b> ' +
-        (state.levelIndex + 1 < LEVELS.length
-          ? 'Next up — level ' + (state.levelIndex + 2) + ': ' + esc(LEVELS[state.levelIndex + 1].title) + '.'
-          : 'That was the last level — you have the whole algebra.'));
+      setFeedback('good', (grade === 'gold' ? '★ ' : '✓ ') + '<b>Correct!</b> ' + nextUp());
       celebrate();
       renderPills();
       renderNav();
@@ -623,8 +825,22 @@
     }
   }
 
+  /* After a win: the same question in the other language is the best next
+     thing to do, so offer it before pointing at the next level. */
+  function nextUp() {
+    var other = otherMode();
+    if (has(level(), other) && solvedIn(other)[state.levelIndex] !== 'gold') {
+      return 'The same question works in ' + modeName(other) + ' too.' +
+        '<button class="link-btn" type="button" data-action="switch">Try it ›</button>';
+    }
+    if (state.levelIndex + 1 < LEVELS.length) {
+      return 'Next up — level ' + (state.levelIndex + 2) + ': ' + esc(LEVELS[state.levelIndex + 1].title) + '.';
+    }
+    return 'That was the last level — you have both languages.';
+  }
+
   function showHint() {
-    var hints = level().hints || [];
+    var hints = view().hints;
     if (state.hintsShown >= hints.length) {
       setFeedback('info', 'No hints left — try <b>Show solution</b> to see the finished query.');
       return;
@@ -637,7 +853,8 @@
 
   function showSolution() {
     state.usedHelp = true;
-    state.tree = clone(level().solution);
+    if (state.mode === 'sql') setSqlText(level().sql.solution);
+    else state.tree = clone(level().solution);
     render();
     setFeedback('info', 'This is one correct answer. Press <b>Check answer</b> to record it, ' +
       'then try rebuilding it yourself.');
@@ -649,30 +866,72 @@
     if (i < 0 || i >= LEVELS.length) return;
     state.levelIndex = i;
     state.tree = null;
+    state.sql = '';
     state.hintsShown = 0;
-    state.usedHelp = !!state.solved[i] && state.solved[i] === 'silver';
     state.armed = null;
+    // A level the current language cannot ask simply switches language.
+    var switched = false;
+    if (!has(level(), state.mode)) { state.mode = otherMode(); switched = true; }
+    state.usedHelp = solvedIn(state.mode)[i] === 'silver';
+    save();
+    render();
+    clearFeedback();
+    if (switched) {
+      setFeedback('info', 'Level ' + (i + 1) + ' can only be asked in ' + modeName(state.mode) + '.');
+    }
+  }
+
+  function setMode(mode) {
+    if (mode === state.mode || !has(level(), mode)) return;
+    state.mode = mode;
+    state.hintsShown = 0;
+    state.usedHelp = solvedIn(mode)[state.levelIndex] === 'silver';
+    state.armed = null;
+    closeSuggest();
     save();
     render();
     clearFeedback();
   }
 
+  function renderMode() {
+    var lv = level();
+    [['ra', el.modeRA], ['sql', el.modeSQL]].forEach(function (pair) {
+      pair[1].setAttribute('aria-selected', String(state.mode === pair[0]));
+      pair[1].disabled = !has(lv, pair[0]);
+    });
+    el.raSurface.hidden = state.mode !== 'ra';
+    el.sqlSurface.hidden = state.mode !== 'sql';
+    if (el.sqlInput.value !== state.sql) el.sqlInput.value = state.sql;
+
+    var note = '';
+    if (!has(lv, 'ra')) note = '<b>SQL only.</b> ' + esc(lv.raNote || '');
+    else if (!has(lv, 'sql')) note = '<b>Algebra only.</b> ' + esc(lv.sqlNote || '');
+    el.modeNote.innerHTML = note;
+    el.modeNote.hidden = !note;
+  }
+
   function renderPills() {
+    var solved = solvedIn(state.mode);
     el.pills.innerHTML = LEVELS.map(function (lv, i) {
       var cls = 'pill';
+      var available = has(lv, state.mode);
+      if (!available) cls += ' unavailable';
       if (i === state.levelIndex) cls += ' current';
-      if (state.solved[i]) cls += ' solved ' + state.solved[i];
-      var mark = state.solved[i] === 'gold' ? '★' : (state.solved[i] ? '✓' : i + 1);
+      if (solved[i]) cls += ' solved ' + solved[i];
+      var mark = solved[i] === 'gold' ? '★' : (solved[i] ? '✓' : i + 1);
       var heading = lv.chapter ? '<span class="pill-chapter">' + esc(lv.chapter) + '</span>' : '';
       return heading + '<button class="' + cls + '" data-i="' + i + '" title="' +
-        esc((i + 1) + '. ' + lv.title) + '">' + mark + '</button>';
+        esc((i + 1) + '. ' + lv.title + (available ? '' : ' — not available in ' + modeName(state.mode))) +
+        '">' + mark + '</button>';
     }).join('');
     el.pills.querySelectorAll('.pill').forEach(function (p) {
       p.addEventListener('click', function () { goToLevel(parseInt(p.dataset.i, 10)); });
     });
 
-    var solvedCount = Object.keys(state.solved).length;
-    el.progress.textContent = solvedCount + ' / ' + LEVELS.length + ' solved';
+    el.progress.innerHTML = ['ra', 'sql'].map(function (mode) {
+      return '<span class="' + (mode === state.mode ? 'now' : '') + '">' +
+        countIn(mode) + ' / ' + totalIn(mode) + ' ' + (mode === 'sql' ? 'SQL' : 'algebra') + '</span>';
+    }).join('<span class="sep">·</span>');
     el.barNow.textContent = (state.levelIndex + 1) + ' · ' + level().title;
   }
 
@@ -696,12 +955,12 @@
   }
 
   function renderQuestion() {
-    var lv = level();
+    var lv = level(), shown = view();
     el.levelLabel.textContent = 'Level ' + (state.levelIndex + 1) + ' of ' + LEVELS.length;
     el.levelTitle.textContent = lv.title;
-    el.question.innerHTML = lv.question;
-    if (lv.tip) {
-      el.tip.innerHTML = lv.tip;
+    el.question.innerHTML = shown.question;
+    if (shown.tip) {
+      el.tip.innerHTML = shown.tip;
       el.tip.hidden = false;
     } else {
       el.tip.hidden = true;
@@ -711,19 +970,20 @@
   function renderNav() {
     el.prev.disabled = state.levelIndex === 0;
     el.next.disabled = state.levelIndex >= LEVELS.length - 1;
-    var hints = level().hints || [];
+    var hints = view().hints;
     el.hint.disabled = false;
     el.hint.textContent = state.hintsShown >= hints.length ? 'No hints left' : 'Hint (' +
       (hints.length - state.hintsShown) + ')';
   }
 
   function render() {
+    renderMode();
     renderQuestion();
     renderPills();
     renderNav();
     renderTables();
-    renderPalette();
-    renderTree();
+    renderTools();
+    if (state.mode === 'ra') renderTree();
     updateArmedUI();
     refreshOutput();
   }
@@ -773,14 +1033,66 @@
 
   function init() {
     ['levelbar', 'barToggle', 'barNow', 'pills', 'progress', 'levelLabel', 'levelTitle', 'question', 'tip', 'dbName', 'dbBlurb',
-     'tables', 'palette', 'canvas', 'formula', 'exprInput', 'exprError',
-     'exprSuggest', 'exprMirror',
+     'tables', 'opBlock', 'palette', 'clauseBlock', 'clauses',
+     'modeRA', 'modeSQL', 'modeNote', 'raSurface', 'sqlSurface',
+     'canvas', 'formula', 'exprInput', 'exprError', 'exprSuggest', 'exprMirror',
+     'sqlInput', 'sqlError', 'sqlSuggest', 'sqlMirror',
+     'peekToggle', 'peek', 'btnUseSQL',
      'output', 'outputMeta', 'resultToggle', 'feedback', 'confetti'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
     el.prev = document.getElementById('btnPrev');
     el.next = document.getElementById('btnNext');
     el.hint = document.getElementById('btnHint');
+
+    surfaces.ra = {
+      input: el.exprInput, menu: el.exprSuggest, mirror: el.exprMirror,
+      candidates: raCandidates, place: placeInline,
+      changed: function () { onExprInput({ noSuggest: true }); }
+    };
+    surfaces.sql = {
+      input: el.sqlInput, menu: el.sqlSuggest, mirror: el.sqlMirror,
+      candidates: sqlCandidates, place: placeBlock,
+      changed: function () { onSqlInput({ noSuggest: true }); }
+    };
+
+    el.modeRA.addEventListener('click', function () { setMode('ra'); });
+    el.modeSQL.addEventListener('click', function () { setMode('sql'); });
+    el.peekToggle.addEventListener('click', function () { setPeekOpen(!state.peekOpen); });
+    el.btnUseSQL.addEventListener('click', function () {
+      var text = lastPeek;
+      if (!text) return;
+      setMode('sql');
+      setSqlText(text);
+      state.usedHelp = true;          // translating your own answer is still a leg-up
+      setFeedback('info', 'Your algebra, written out as SQL. Read it, then press <b>Check answer</b>.');
+    });
+    el.feedback.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
+      if (btn && btn.dataset.action === 'switch') setMode(otherMode());
+    });
+
+    el.sqlInput.addEventListener('input', function () { onSqlInput(); });
+    el.sqlInput.addEventListener('blur', function () {
+      closeSuggest();
+      clearTimeout(sqlErrorTimer);
+      var res = evaluateSQL();
+      setSqlError(res.ok || res.error === 'incomplete' ? '' : res.error);
+    });
+    el.sqlInput.addEventListener('keydown', function (e) {
+      if (suggest.open) {
+        if (e.key === 'Tab' || e.key === 'Enter') {
+          e.preventDefault();
+          accept(suggest.items[suggest.index]);
+          return;
+        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveSuggest(1); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); moveSuggest(-1); return; }
+        if (e.key === 'Escape') { e.preventDefault(); closeSuggest(); return; }
+      }
+      // A query is several lines, so Enter belongs to the text: ⌘/Ctrl checks.
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); check(); }
+    });
 
     el.barToggle.addEventListener('click', function () { setBarOpen(!state.barOpen); });
     el.resultToggle.addEventListener('click', function () { setResultOpen(!state.resultOpen); });
@@ -818,7 +1130,9 @@
     document.getElementById('btnCheck').addEventListener('click', check);
     document.getElementById('btnClear').addEventListener('click', function () {
       state.tree = null;
+      state.sql = '';
       state.armed = null;
+      setSqlError('');
       render();
       clearFeedback();
     });
@@ -828,11 +1142,13 @@
     el.next.addEventListener('click', function () { goToLevel(state.levelIndex + 1); });
     document.getElementById('btnReset').addEventListener('click', function () {
       if (!confirm('Reset all progress and start from level 1?')) return;
-      state.solved = {};
+      state.solved = { ra: {}, sql: {} };
       state.levelIndex = 0;
       state.usedHelp = false;
       state.hintsShown = 0;
       state.tree = null;
+      state.sql = '';
+      if (!has(level(), state.mode)) state.mode = otherMode();
       save();
       render();
       clearFeedback();
@@ -844,9 +1160,11 @@
     document.body.addEventListener('dragend', endDrag);
 
     load();
-    state.usedHelp = state.solved[state.levelIndex] === 'silver';
+    if (!has(level(), state.mode)) state.mode = otherMode();
+    state.usedHelp = solvedIn(state.mode)[state.levelIndex] === 'silver';
     setBarOpen(state.barOpen);
     setResultOpen(state.resultOpen);
+    setPeekOpen(state.peekOpen);
     render();
   }
 
