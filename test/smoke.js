@@ -332,6 +332,18 @@ JSDOM.fromFile(path, {
   if (!/order/.test(unordered)) errors.push('row order should be checked on an ORDER BY level');
   if (!/Correct/.test(text('#feedback'))) errors.push('the ordered answer was rejected');
 
+  // A level about how the query is written: the right rows are not enough.
+  const unnest = LEVELS.findIndex(l => l.title === 'Unnesting IN');
+  click(doc.querySelectorAll('.pill')[unnest]);
+  typeSql('SELECT ename FROM Employee WHERE eid IN (SELECT eid FROM WorksOn NATURAL JOIN Project WHERE budget > 100000)');
+  click($('#btnCheck'));
+  const nested = text('#feedback').trim();
+  typeSql('SELECT DISTINCT ename FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project WHERE budget > 100000');
+  click($('#btnCheck'));
+  console.log('rule   :', nested.slice(0, 70));
+  if (!/without a subquery/.test(nested)) errors.push('a forbidden subquery was accepted');
+  if (!/Correct/.test(text('#feedback'))) errors.push('the unnested answer was rejected');
+
   // 10. The algebra you built, written out as SQL.
   click(doc.querySelectorAll('.pill')[3]);              // level 4: Filter, then project
   click($('#modeRA'));

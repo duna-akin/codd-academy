@@ -1267,6 +1267,628 @@
                   'GROUP BY dept\n' +
                   'ORDER BY n DESC, dept'
       }
+    },
+    {
+      db: 'company',
+      chapter: 'Subqueries',
+      title: 'Is it in the list?',
+      question: 'Return the names of employees who work on at least one project with a budget over 100000.',
+      focus: [],
+      tip: 'Nothing new in the algebra: join your way to the budget, then filter. The SQL side of this ' +
+           'chapter is where the new idea is.',
+      hints: [
+        'Employee ⋈ WorksOn ⋈ Project puts a name and a budget in the same row.',
+        'π<sub>ename</sub>(σ<sub>budget &gt; 100000</sub>(Employee ⋈ WorksOn ⋈ Project))'
+      ],
+      solution: op('project', 'ename', [
+        op('select', 'budget > 100000', [
+          op('join', '', [op('join', '', [rel('Employee'), rel('WorksOn')]), rel('Project')])
+        ])
+      ]),
+      sql: {
+        tip: '<b>IN</b> asks whether a value is one of the values a subquery returns. The subquery runs on ' +
+             'its own and hands back a single column — and a subquery can have an IN of its own.',
+        focus: ['IN'],
+        hints: [
+          'Work from the inside out. Which projects have a budget over 100000? That is one column of pids.',
+          'Which employees work on one of those projects? That is a column of eids, found with a second IN.',
+          'No DISTINCT is needed: Ada works on two big projects, but her Employee row is only tested once.',
+          'SELECT ename FROM Employee WHERE eid IN (SELECT eid FROM WorksOn WHERE pid IN ' +
+            '(SELECT pid FROM Project WHERE budget &gt; 100000))'
+        ],
+        solution: 'SELECT ename\n' +
+                  'FROM Employee\n' +
+                  'WHERE eid IN (\n' +
+                  '  SELECT eid FROM WorksOn\n' +
+                  '  WHERE pid IN (SELECT pid FROM Project WHERE budget > 100000))'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Is there one?',
+      question: 'Return the name and floor of every department that has at least one employee earning under 55000.',
+      focus: [],
+      tip: '“At least one” is a join: a department survives if it pairs with some employee who passes the test.',
+      hints: [
+        'Filter Employee first, then join it to Department on dept.',
+        'π<sub>dept, floor</sub>(Department ⋈ σ<sub>salary &lt; 55000</sub>(Employee))'
+      ],
+      solution: op('project', 'dept, floor', [
+        op('join', '', [rel('Department'), op('select', 'salary < 55000', [rel('Employee')])])
+      ]),
+      sql: {
+        tip: '<b>EXISTS (…)</b> is true when the subquery finds at least one row. Mention the outer row inside ' +
+             'it — E.dept = D.dept — and it is asked again for every department: a <i>correlated</i> subquery.',
+        focus: ['EXISTS'],
+        hints: [
+          'For each department D, look for an employee E in that department who earns under 55000.',
+          'What the subquery selects does not matter, only whether it finds anything. SELECT * is the convention.',
+          'SELECT dept, floor FROM Department D WHERE EXISTS (SELECT * FROM Employee E ' +
+            'WHERE E.dept = D.dept AND E.salary &lt; 55000)'
+        ],
+        solution: 'SELECT dept, floor\n' +
+                  'FROM Department D\n' +
+                  'WHERE EXISTS (\n' +
+                  '  SELECT * FROM Employee E\n' +
+                  '  WHERE E.dept = D.dept AND E.salary < 55000)'
+      }
+    },
+    {
+      db: 'school',
+      title: 'Is there none?',
+      question: 'Return the names of students who are not enrolled in any Math course.',
+      focus: [],
+      tip: 'Find the students who <i>are</i> in a Math course, and take them away from everyone.',
+      hints: [
+        'The ids of students in a Math course: π<sub>sid</sub>(Enrolled ⋈ σ<sub>cdept = \'Math\'</sub>(Course)).',
+        'Subtract those from every student id, then join back to Student for the names.',
+        'π<sub>sname</sub>(Student ⋈ (π<sub>sid</sub>(Student) − π<sub>sid</sub>(Enrolled ⋈ σ<sub>cdept = \'Math\'</sub>(Course))))'
+      ],
+      solution: op('project', 'sname', [
+        op('join', '', [
+          rel('Student'),
+          op('difference', '', [
+            op('project', 'sid', [rel('Student')]),
+            op('project', 'sid', [
+              op('join', '', [rel('Enrolled'), op('select', "cdept = 'Math'", [rel('Course')])])
+            ])
+          ])
+        ])
+      ]),
+      sql: {
+        tip: '<b>NOT EXISTS</b> is true when the subquery comes back empty: “there is no Math course this ' +
+             'student is enrolled in”.',
+        focus: ['NOT EXISTS'],
+        hints: [
+          'For each student S, search for an enrolment of theirs in a Math course. Keep the students for whom ' +
+            'the search finds nothing.',
+          'The subquery joins Enrolled to Course, and ties itself to the outer student with E.sid = S.sid.',
+          'NOT IN would work here too. But in a real database a single NULL in the subquery makes NOT IN ' +
+            'return no rows at all, and NOT EXISTS has no such trap.',
+          'SELECT sname FROM Student S WHERE NOT EXISTS (SELECT * FROM Enrolled E JOIN Course C ' +
+            'ON E.cid = C.cid WHERE E.sid = S.sid AND C.cdept = \'Math\')'
+        ],
+        solution: 'SELECT sname\n' +
+                  'FROM Student S\n' +
+                  'WHERE NOT EXISTS (\n' +
+                  '  SELECT * FROM Enrolled E JOIN Course C ON E.cid = C.cid\n' +
+                  "  WHERE E.sid = S.sid AND C.cdept = 'Math')"
+      }
+    },
+    {
+      db: 'company',
+      title: 'Unnesting IN',
+      question: 'In <i>Is it in the list?</i> you found the employees on a project with a budget over 100000 ' +
+                'using IN. Return the same names again, this time <b>without a subquery</b>.',
+      raNote: 'The algebra has no subqueries to take out. Every algebra answer is already the flat version, ' +
+              'so this rewrite is the algebra written in SQL.',
+      sql: {
+        tip: 'An IN subquery is a join in disguise: join the table the subquery read, and move its WHERE ' +
+             'into yours. But a join repeats a row once for every match, and IN never did.',
+        forbid: ['subquery'],
+        hints: [
+          'Join Employee to WorksOn to Project, and filter on the budget.',
+          'Ada works on two big projects, so the join finds her twice. The IN version did not. ' +
+            'Which keyword fixes that?',
+          'SELECT DISTINCT ename FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project WHERE budget &gt; 100000'
+        ],
+        solution: 'SELECT DISTINCT ename\n' +
+                  'FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project\n' +
+                  'WHERE budget > 100000'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Unnesting NOT EXISTS',
+      question: 'Return the id and name of every employee who is not billed to any project, ' +
+                '<b>without a subquery</b>.',
+      raNote: 'The algebra has no subqueries to take out. Every algebra answer is already the flat version, ' +
+              'so this rewrite is the algebra written in SQL.',
+      sql: {
+        tip: 'A join cannot do this alone, because an inner join only ever finds matches. “Everyone, except ' +
+             'the ones with a match” is <b>EXCEPT</b>: the − of the algebra.',
+        forbid: ['subquery'],
+        hints: [
+          'Take every employee’s id and name, and subtract the ids and names of the employees who appear in WorksOn.',
+          'Both sides of EXCEPT need the same columns, in the same order.',
+          'SELECT eid, ename FROM Employee EXCEPT SELECT eid, ename FROM Employee NATURAL JOIN WorksOn'
+        ],
+        solution: 'SELECT eid, ename FROM Employee\n' +
+                  'EXCEPT\n' +
+                  'SELECT eid, ename FROM Employee NATURAL JOIN WorksOn'
+      }
+    },
+    {
+      db: 'company',
+      chapter: 'Scalar subqueries',
+      title: 'Above average',
+      question: 'Return the name and salary of every employee who earns more than the company’s average salary.',
+      focus: [],
+      tip: 'ℱ gives you the average as a relation with one row. × pairs that row with every employee, and ' +
+           'then σ can compare two columns of the same row.',
+      hints: [
+        'ℱ<sub>AVG(salary)</sub>(Employee) is one row with one column, AVG_salary.',
+        'Employee × that relation gives every employee a copy of the average.',
+        'π<sub>ename, salary</sub>(σ<sub>salary &gt; AVG_salary</sub>(Employee × ℱ<sub>AVG(salary)</sub>(Employee)))'
+      ],
+      solution: op('project', 'ename, salary', [
+        op('select', 'salary > AVG_salary', [
+          op('product', '', [rel('Employee'), op('group', 'AVG(salary)', [rel('Employee')], '')])
+        ])
+      ]),
+      sql: {
+        tip: 'A subquery that returns one row and one column is a <i>scalar</i> subquery. It can stand ' +
+             'anywhere a single value can, such as the right-hand side of &gt;.',
+        hints: [
+          'WHERE salary &gt; AVG(salary) is not allowed: WHERE sees one row at a time, and an average needs all of them.',
+          'So work the average out in a query of its own, and put that query where the number would go.',
+          'SELECT ename, salary FROM Employee WHERE salary &gt; (SELECT AVG(salary) FROM Employee)'
+        ],
+        solution: 'SELECT ename, salary\n' +
+                  'FROM Employee\n' +
+                  'WHERE salary > (SELECT AVG(salary) FROM Employee)'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Above their own average',
+      question: 'Return the names of employees who earn more than the average salary <i>of their own department</i>.',
+      focus: [],
+      tip: 'Group by department this time. The averages come out with a dept column, so a natural join hands ' +
+           'each employee the average of their own department.',
+      hints: [
+        '<sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee) has columns dept and AVG_salary.',
+        'π<sub>ename</sub>(σ<sub>salary &gt; AVG_salary</sub>(Employee ⋈ <sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee)))'
+      ],
+      solution: op('project', 'ename', [
+        op('select', 'salary > AVG_salary', [
+          op('join', '', [rel('Employee'), op('group', 'AVG(salary)', [rel('Employee')], 'dept')])
+        ])
+      ]),
+      sql: {
+        tip: 'Correlate a scalar subquery with the outer row and it works out a different value for every ' +
+             'employee: the average of <i>their</i> department.',
+        hints: [
+          'Start from last level’s query. The average needs narrowing down to one department.',
+          'Give the inner Employee a name of its own, F, and keep only the rows where F.dept = E.dept.',
+          'SELECT ename FROM Employee E WHERE salary &gt; (SELECT AVG(salary) FROM Employee F WHERE F.dept = E.dept)'
+        ],
+        solution: 'SELECT ename\n' +
+                  'FROM Employee E\n' +
+                  'WHERE salary > (\n' +
+                  '  SELECT AVG(salary) FROM Employee F\n' +
+                  '  WHERE F.dept = E.dept)'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Counting to zero',
+      question: 'Return every department in the Department table with the number of employees in it. ' +
+                'A department with nobody in it counts as 0.',
+      raNote: 'A group only exists if it has rows in it, so ℱ can never count to 0, and π cannot make the number up.',
+      sql: {
+        tip: 'A scalar subquery can go in the SELECT list too, where it is worked out once for every row. ' +
+             'Unlike GROUP BY it cannot lose a department: every row of Department gets a count, even when ' +
+             'that count is 0.',
+        hints: [
+          'GROUP BY over a join would lose Research, because an inner join has nothing to say about a ' +
+            'department with no employees.',
+          'Read Department, and for each row D count the employees whose dept matches D.dept.',
+          'SELECT dept, (SELECT COUNT(*) FROM Employee E WHERE E.dept = D.dept) AS n FROM Department D'
+        ],
+        solution: 'SELECT dept,\n' +
+                  '       (SELECT COUNT(*) FROM Employee E WHERE E.dept = D.dept) AS n\n' +
+                  'FROM Department D'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Unnesting a scalar subquery',
+      question: 'Return the names of employees who earn more than the average salary of their own department, ' +
+                'as in <i>Above their own average</i>, but <b>without a subquery</b>.',
+      raNote: 'The algebra has no subqueries to take out. Every algebra answer is already the flat version, ' +
+              'so this rewrite is the algebra written in SQL.',
+      sql: {
+        tip: 'Without a subquery the average has to come from a join. Pair each employee E with every colleague ' +
+             'F in the same department, and group the pairs by E. AVG(F.salary) is then the department’s ' +
+             'average, and HAVING can compare E.salary with it.',
+        forbid: ['subquery'],
+        hints: [
+          'FROM Employee E JOIN Employee F ON E.dept = F.dept gives each employee one row per colleague, ' +
+            'themselves included.',
+          'GROUP BY E.eid, E.ename, E.salary, which is everything about E you still need after grouping.',
+          'SELECT E.ename FROM Employee E JOIN Employee F ON E.dept = F.dept ' +
+            'GROUP BY E.eid, E.ename, E.salary HAVING E.salary &gt; AVG(F.salary)'
+        ],
+        solution: 'SELECT E.ename\n' +
+                  'FROM Employee E JOIN Employee F ON E.dept = F.dept\n' +
+                  'GROUP BY E.eid, E.ename, E.salary\n' +
+                  'HAVING E.salary > AVG(F.salary)'
+      }
+    },
+    {
+      db: 'company',
+      chapter: 'Algebra and SQL',
+      title: 'π means DISTINCT',
+      question: 'Translate into the algebra: <code>SELECT DISTINCT dept FROM Employee WHERE salary &gt; 55000</code>',
+      focus: [],
+      tip: 'Read the SQL from FROM outwards: FROM is the relation, WHERE is a σ around it, and SELECT is a π ' +
+           'around that. DISTINCT is what π does anyway.',
+      hints: [
+        'Two operators, one inside the other.',
+        'π<sub>dept</sub>(σ<sub>salary &gt; 55000</sub>(Employee))'
+      ],
+      solution: op('project', 'dept', [op('select', 'salary > 55000', [rel('Employee')])]),
+      sql: {
+        question: 'Translate into SQL: π<sub>dept</sub>(σ<sub>salary &gt; 55000</sub>(Employee))',
+        tip: 'σ becomes WHERE and π becomes the SELECT list. But π also throws duplicate rows away, and ' +
+             'SELECT does not: say so, or Engineering comes back three times.',
+        hints: [
+          'π<sub>dept</sub> becomes SELECT dept, σ becomes WHERE, and the relation goes in FROM.',
+          'Three of the five people who earn over 55000 are in Engineering. π returns Engineering once.',
+          'SELECT DISTINCT dept FROM Employee WHERE salary &gt; 55000'
+        ],
+        solution: 'SELECT DISTINCT dept\n' +
+                  'FROM Employee\n' +
+                  'WHERE salary > 55000'
+      }
+    },
+    {
+      db: 'school',
+      title: '⋈ means a join',
+      question: 'Translate into the algebra: <code>SELECT sname, title FROM Student JOIN Enrolled ON ' +
+                'Student.sid = Enrolled.sid JOIN Course ON Enrolled.cid = Course.cid WHERE cdept = \'Math\'</code>',
+      focus: [],
+      tip: 'A JOIN … ON that equates the columns the two tables share is a natural join, ⋈. The WHERE can ' +
+           'go around the whole join, or around just the relation it is about.',
+      hints: [
+        'Both ON conditions match columns of the same name, so both joins are natural joins.',
+        'π<sub>sname, title</sub>(Student ⋈ Enrolled ⋈ σ<sub>cdept = \'Math\'</sub>(Course))'
+      ],
+      solution: op('project', 'sname, title', [
+        op('join', '', [
+          op('join', '', [rel('Student'), rel('Enrolled')]),
+          op('select', "cdept = 'Math'", [rel('Course')])
+        ])
+      ]),
+      sql: {
+        question: 'Translate into SQL: π<sub>sname, title</sub>(Student ⋈ Enrolled ⋈ σ<sub>cdept = \'Math\'</sub>(Course))',
+        tip: '⋈ is NATURAL JOIN, or JOIN … USING, or JOIN … ON with the matching columns spelled out. Where the ' +
+             'σ sits in the tree does not matter to SQL: every condition goes in the one WHERE.',
+        hints: [
+          'Student NATURAL JOIN Enrolled NATURAL JOIN Course, then a WHERE for the σ.',
+          'Strictly, the π means DISTINCT. No pair repeats here, so the answer is the same either way.',
+          'SELECT DISTINCT sname, title FROM Student NATURAL JOIN Enrolled NATURAL JOIN Course WHERE cdept = \'Math\''
+        ],
+        solution: 'SELECT DISTINCT sname, title\n' +
+                  'FROM Student NATURAL JOIN Enrolled NATURAL JOIN Course\n' +
+                  "WHERE cdept = 'Math'"
+      }
+    },
+    {
+      db: 'company',
+      title: 'ρ and × mean aliases',
+      question: 'Translate into the algebra: <code>SELECT A.ename, B.ename FROM Employee A JOIN Employee B ' +
+                'ON A.dept = B.dept WHERE A.salary &gt; B.salary</code>',
+      focus: [],
+      tip: 'Each alias in FROM is a ρ. A JOIN … ON is a × with a σ above it, and the WHERE can join that σ.',
+      hints: [
+        'ρ<sub>A</sub>(Employee) × ρ<sub>B</sub>(Employee) gives every pairing.',
+        'Both conditions, the ON and the WHERE, go into one σ.',
+        'π<sub>A.ename, B.ename</sub>(σ<sub>A.dept = B.dept AND A.salary &gt; B.salary</sub>(ρ<sub>A</sub>(Employee) × ρ<sub>B</sub>(Employee)))'
+      ],
+      solution: op('project', 'A.ename, B.ename', [
+        op('select', 'A.dept = B.dept AND A.salary > B.salary', [
+          op('product', '', [op('rename', 'A', [rel('Employee')]), op('rename', 'B', [rel('Employee')])])
+        ])
+      ]),
+      sql: {
+        question: 'Translate into SQL: π<sub>A.ename, B.ename</sub>(σ<sub>A.dept = B.dept AND A.salary &gt; ' +
+                  'B.salary</sub>(ρ<sub>A</sub>(Employee) × ρ<sub>B</sub>(Employee)))',
+        tip: 'ρ<sub>A</sub> is an alias: FROM Employee A. × is a comma, or CROSS JOIN, and the σ above it is ' +
+             'the WHERE that turns the product into a join.',
+        hints: [
+          'FROM Employee A, Employee B',
+          'SELECT A.ename, B.ename FROM Employee A, Employee B WHERE A.dept = B.dept AND A.salary &gt; B.salary'
+        ],
+        solution: 'SELECT A.ename, B.ename\n' +
+                  'FROM Employee A, Employee B\n' +
+                  'WHERE A.dept = B.dept AND A.salary > B.salary'
+      }
+    },
+    {
+      db: 'school',
+      title: '− means EXCEPT',
+      question: 'Translate into the algebra: <code>SELECT sid FROM Student WHERE major = \'CS\' AND sid NOT IN ' +
+                '(SELECT sid FROM Enrolled WHERE grade = \'A\')</code>',
+      focus: [],
+      tip: 'σ cannot hold a subquery. “Not in that list” is a difference: everything on the left, minus what ' +
+           'the subquery would have found.',
+      hints: [
+        'The left side is the CS students’ ids. The right side is the subquery, as an expression of its own.',
+        'π<sub>sid</sub>(σ<sub>major = \'CS\'</sub>(Student)) − π<sub>sid</sub>(σ<sub>grade = \'A\'</sub>(Enrolled))'
+      ],
+      solution: op('difference', '', [
+        op('project', 'sid', [op('select', "major = 'CS'", [rel('Student')])]),
+        op('project', 'sid', [op('select', "grade = 'A'", [rel('Enrolled')])])
+      ]),
+      sql: {
+        question: 'Translate into SQL: π<sub>sid</sub>(σ<sub>major = \'CS\'</sub>(Student)) − ' +
+                  'π<sub>sid</sub>(σ<sub>grade = \'A\'</sub>(Enrolled))',
+        tip: '∪, ∩ and − are UNION, INTERSECT and EXCEPT, each written between two whole queries. Like π ' +
+             'they throw duplicates away, unless you write ALL.',
+        hints: [
+          'Translate each side of the − as a query of its own.',
+          'SELECT sid FROM Student WHERE major = \'CS\' EXCEPT SELECT sid FROM Enrolled WHERE grade = \'A\''
+        ],
+        solution: "SELECT sid FROM Student WHERE major = 'CS'\n" +
+                  'EXCEPT\n' +
+                  "SELECT sid FROM Enrolled WHERE grade = 'A'"
+      }
+    },
+    {
+      db: 'company',
+      title: 'σ over ℱ means HAVING',
+      question: 'Translate into the algebra: <code>SELECT dept FROM Employee GROUP BY dept HAVING AVG(salary) &gt; 60000</code>',
+      focus: [],
+      tip: 'HAVING is a σ over the result of ℱ, and it tests the column ℱ made: AVG(salary) is called AVG_salary there.',
+      hints: [
+        'Build the groups first: <sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee).',
+        'π<sub>dept</sub>(σ<sub>AVG_salary &gt; 60000</sub>(<sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee)))'
+      ],
+      solution: op('project', 'dept', [
+        op('select', 'AVG_salary > 60000', [op('group', 'AVG(salary)', [rel('Employee')], 'dept')])
+      ]),
+      sql: {
+        question: 'Translate into SQL: π<sub>dept</sub>(σ<sub>AVG_salary &gt; 60000</sub>' +
+                  '(<sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee)))',
+        tip: 'ℱ is GROUP BY plus the aggregates. A σ <i>above</i> the ℱ filters groups, so it becomes HAVING. ' +
+             'A σ below it would have been WHERE.',
+        hints: [
+          'The attributes left of the ℱ go in GROUP BY.',
+          'AVG_salary is the algebra’s name for AVG(salary). In SQL you write the call itself.',
+          'SELECT dept FROM Employee GROUP BY dept HAVING AVG(salary) &gt; 60000'
+        ],
+        solution: 'SELECT dept\n' +
+                  'FROM Employee\n' +
+                  'GROUP BY dept\n' +
+                  'HAVING AVG(salary) > 60000'
+      }
+    },
+    {
+      db: 'school',
+      title: '÷ means NOT EXISTS twice',
+      question: 'Translate into the algebra: <code>SELECT sid FROM Student S WHERE NOT EXISTS (SELECT * FROM ' +
+                'Course C WHERE C.credits = 4 AND NOT EXISTS (SELECT * FROM Enrolled E WHERE E.sid = S.sid ' +
+                'AND E.cid = C.cid))</code>',
+      focus: [],
+      tip: '“No 4-credit course they are not enrolled in” is “enrolled in every 4-credit course”, and ' +
+           '“every” is ÷.',
+      hints: [
+        'The left side of ÷ pairs students with courses: π<sub>sid, cid</sub>(Enrolled).',
+        'The right side is the courses they must all have: the 4-credit ones.',
+        'π<sub>sid, cid</sub>(Enrolled) ÷ π<sub>cid</sub>(σ<sub>credits = 4</sub>(Course))'
+      ],
+      solution: op('divide', '', [
+        op('project', 'sid, cid', [rel('Enrolled')]),
+        op('project', 'cid', [op('select', 'credits = 4', [rel('Course')])])
+      ]),
+      sql: {
+        question: 'Translate into SQL: π<sub>sid, cid</sub>(Enrolled) ÷ π<sub>cid</sub>(σ<sub>credits = 4</sub>(Course))',
+        tip: 'SQL has no ÷. Say it the long way round: a student qualifies if there is <i>no</i> 4-credit ' +
+             'course they are <i>not</i> enrolled in.',
+        hints: [
+          'The outer query reads Student S. The middle one looks for a 4-credit course C…',
+          '…that has no enrolment of S in it: the innermost NOT EXISTS.',
+          'Counting works too: GROUP BY sid HAVING COUNT(*) = (SELECT COUNT(*) FROM Course WHERE credits = 4), ' +
+            'over the enrolments in 4-credit courses.',
+          'SELECT sid FROM Student S WHERE NOT EXISTS (SELECT * FROM Course C WHERE C.credits = 4 AND NOT EXISTS ' +
+            '(SELECT * FROM Enrolled E WHERE E.sid = S.sid AND E.cid = C.cid))'
+        ],
+        solution: 'SELECT sid\n' +
+                  'FROM Student S\n' +
+                  'WHERE NOT EXISTS (\n' +
+                  '  SELECT * FROM Course C\n' +
+                  '  WHERE C.credits = 4 AND NOT EXISTS (\n' +
+                  '    SELECT * FROM Enrolled E\n' +
+                  '    WHERE E.sid = S.sid AND E.cid = C.cid))'
+      }
+    },
+    {
+      db: 'company',
+      chapter: 'Views and CTEs',
+      title: 'Naming a step',
+      question: 'Return the departments whose average salary is higher than the average salary of the whole company.',
+      focus: [],
+      tip: 'The algebra has no names for steps, so everything is written out in place. Use ℱ twice, once per ' +
+           'department and once for everyone, then × the two and compare.',
+      hints: [
+        'The company average needs a name of its own so its column does not clash: ρ<sub>Overall(company)</sub>(ℱ<sub>AVG(salary)</sub>(Employee)).',
+        '× it with <sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee), then keep the rows where AVG_salary &gt; company.',
+        'π<sub>dept</sub>(σ<sub>AVG_salary &gt; company</sub>(<sub>dept</sub>ℱ<sub>AVG(salary)</sub>(Employee) × ' +
+          'ρ<sub>Overall(company)</sub>(ℱ<sub>AVG(salary)</sub>(Employee))))'
+      ],
+      solution: op('project', 'dept', [
+        op('select', 'AVG_salary > company', [
+          op('product', '', [
+            op('group', 'AVG(salary)', [rel('Employee')], 'dept'),
+            op('rename', 'Overall(company)', [op('group', 'AVG(salary)', [rel('Employee')], '')])
+          ])
+        ])
+      ]),
+      sql: {
+        tip: '<b>WITH</b> gives a query a name for the length of one statement. That named query is a ' +
+             '<i>common table expression</i>, or CTE. Use one when a step belongs to this query alone: nobody ' +
+             'else needs it, and it is gone when the query ends.',
+        focus: ['WITH'],
+        require: ['with'],
+        hints: [
+          'WITH DeptPay AS (SELECT dept, AVG(salary) AS pay FROM Employee GROUP BY dept)',
+          'After that the question reads almost like English: SELECT dept FROM DeptPay WHERE pay &gt; the company average.',
+          'WITH DeptPay AS (SELECT dept, AVG(salary) AS pay FROM Employee GROUP BY dept) ' +
+            'SELECT dept FROM DeptPay WHERE pay &gt; (SELECT AVG(salary) FROM Employee)'
+        ],
+        solution: 'WITH DeptPay AS (\n' +
+                  '  SELECT dept, AVG(salary) AS pay\n' +
+                  '  FROM Employee\n' +
+                  '  GROUP BY dept)\n' +
+                  'SELECT dept\n' +
+                  'FROM DeptPay\n' +
+                  'WHERE pay > (SELECT AVG(salary) FROM Employee)'
+      }
+    },
+    {
+      db: 'company',
+      title: 'Using it twice',
+      question: 'Return the name of the project with the most hours billed to it.',
+      focus: [],
+      tip: 'This is what a CTE saves you from. The per-project totals are needed twice, and the algebra has ' +
+           'to write them out in full both times.',
+      hints: [
+        'The totals: <sub>pid</sub>ℱ<sub>SUM(hours)</sub>(WorksOn), with columns pid and SUM_hours.',
+        'The biggest total: ℱ<sub>MAX(SUM_hours)</sub> of that, renamed back to (SUM_hours) so a natural join ' +
+          'with the totals finds the project that has it.',
+        'π<sub>pname</sub>(Project ⋈ (<sub>pid</sub>ℱ<sub>SUM(hours)</sub>(WorksOn) ⋈ ρ<sub>(SUM_hours)</sub>' +
+          '(ℱ<sub>MAX(SUM_hours)</sub>(<sub>pid</sub>ℱ<sub>SUM(hours)</sub>(WorksOn)))))'
+      ],
+      solution: op('project', 'pname', [
+        op('join', '', [
+          rel('Project'),
+          op('join', '', [
+            op('group', 'SUM(hours)', [rel('WorksOn')], 'pid'),
+            op('rename', '(SUM_hours)', [
+              op('group', 'MAX(SUM_hours)', [op('group', 'SUM(hours)', [rel('WorksOn')], 'pid')], '')
+            ])
+          ])
+        ])
+      ]),
+      sql: {
+        tip: 'A CTE earns its keep when a step is needed twice. The totals are read once to find the biggest, ' +
+             'and again to find which project has it. With subqueries you would write the GROUP BY out twice ' +
+             'and have to keep the two copies the same.',
+        require: ['with'],
+        hints: [
+          'WITH Load AS (SELECT pid, SUM(hours) AS total FROM WorksOn GROUP BY pid)',
+          'Join Load to Project for the names, and keep the row whose total equals the biggest total in Load.',
+          'WITH Load AS (SELECT pid, SUM(hours) AS total FROM WorksOn GROUP BY pid) SELECT pname FROM Project ' +
+            'NATURAL JOIN Load WHERE total = (SELECT MAX(total) FROM Load)'
+        ],
+        solution: 'WITH Load AS (\n' +
+                  '  SELECT pid, SUM(hours) AS total\n' +
+                  '  FROM WorksOn\n' +
+                  '  GROUP BY pid)\n' +
+                  'SELECT pname\n' +
+                  'FROM Project NATURAL JOIN Load\n' +
+                  'WHERE total = (SELECT MAX(total) FROM Load)'
+      }
+    },
+    {
+      db: 'company',
+      title: 'A view for everyone',
+      question: 'The project managers ask the same kind of question every week: who is billed to which project, ' +
+                'and for how many hours. Create a view <b>Billing</b> with the columns ename, pname and hours, ' +
+                'then use it to return the names of everyone billed to Comet.',
+      raNote: 'A view is something the database keeps between queries. The algebra has expressions, but no ' +
+              'schema to keep one in.',
+      sql: {
+        tip: '<b>CREATE VIEW</b> stores a query in the database under a name, and from then on any query, ' +
+             'anyone’s, can read it like a table. It is not a copy: every read runs the query again, so it is ' +
+             'never out of date. Use a view when the same question keeps coming back, from more than one query ' +
+             'or more than one person.',
+        focus: ['CREATE VIEW'],
+        require: ['view'],
+        hints: [
+          'CREATE VIEW Billing AS SELECT ename, pname, hours FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project;',
+          'The semicolon ends the view. After it, write an ordinary query FROM Billing.',
+          'In a real database the view would still be there next week. Here it lasts as long as your answer.',
+          'CREATE VIEW Billing AS SELECT ename, pname, hours FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project; ' +
+            'SELECT ename FROM Billing WHERE pname = \'Comet\''
+        ],
+        solution: 'CREATE VIEW Billing AS\n' +
+                  '  SELECT ename, pname, hours\n' +
+                  '  FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project;\n' +
+                  '\n' +
+                  'SELECT ename\n' +
+                  'FROM Billing\n' +
+                  "WHERE pname = 'Comet'"
+      }
+    },
+    {
+      db: 'company',
+      title: 'A view as a keyhole',
+      question: 'Salaries are private, but anyone may look up who works where. Create a view <b>Directory</b> ' +
+                'with only each employee’s id, name and department, and no salary or age. Then use it to ' +
+                'return the names of everyone in Marketing.',
+      raNote: 'A view is something the database keeps between queries. The algebra has expressions, but no ' +
+              'schema to keep one in.',
+      sql: {
+        tip: 'A view also decides what can be seen. Give people the view instead of the table, and they can ' +
+             'look up names and departments all they like while the salaries are simply not there. A CTE cannot ' +
+             'do this, because it lives inside a query that already reads the table.',
+        require: ['view'],
+        hints: [
+          'The view is a π of Employee: SELECT eid, ename, dept.',
+          'CREATE VIEW Directory AS SELECT eid, ename, dept FROM Employee; SELECT ename FROM Directory WHERE dept = \'Marketing\''
+        ],
+        solution: 'CREATE VIEW Directory AS\n' +
+                  '  SELECT eid, ename, dept FROM Employee;\n' +
+                  '\n' +
+                  'SELECT ename\n' +
+                  'FROM Directory\n' +
+                  "WHERE dept = 'Marketing'"
+      }
+    },
+    {
+      db: 'company',
+      title: 'Each in its place',
+      question: 'Every weekly report reads the <b>Billing</b> view from <i>A view for everyone</i>. Only today’s ' +
+                'report needs each person’s total hours. Create the view, work the totals out in a WITH step, ' +
+                'and return the names of everyone billed for more than 20 hours in total.',
+      raNote: 'A view is something the database keeps between queries. The algebra has expressions, but no ' +
+              'schema to keep one in.',
+      sql: {
+        tip: 'The rule of thumb, in one query: what many queries share goes in a view, kept in the schema. What ' +
+             'only this query needs goes in a WITH, and it is gone when the query ends.',
+        require: ['view', 'with'],
+        hints: [
+          'Start with the same CREATE VIEW Billing … ; as before.',
+          'Then WITH Totals AS (SELECT ename, SUM(hours) AS total FROM Billing GROUP BY ename)',
+          'CREATE VIEW Billing AS SELECT ename, pname, hours FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project; ' +
+            'WITH Totals AS (SELECT ename, SUM(hours) AS total FROM Billing GROUP BY ename) ' +
+            'SELECT ename FROM Totals WHERE total &gt; 20'
+        ],
+        solution: 'CREATE VIEW Billing AS\n' +
+                  '  SELECT ename, pname, hours\n' +
+                  '  FROM Employee NATURAL JOIN WorksOn NATURAL JOIN Project;\n' +
+                  '\n' +
+                  'WITH Totals AS (\n' +
+                  '  SELECT ename, SUM(hours) AS total\n' +
+                  '  FROM Billing\n' +
+                  '  GROUP BY ename)\n' +
+                  'SELECT ename\n' +
+                  'FROM Totals\n' +
+                  'WHERE total > 20'
+      }
     }
   ];
 
