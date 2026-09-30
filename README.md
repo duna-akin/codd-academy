@@ -60,8 +60,9 @@ Serving it over HTTP also works, and is the other way around a sandboxed browser
 
 ## The levels
 
-Forty-three puzzles in seven chapters. Levels 1–37 can be answered in either language; 38–43 are SQL
-only, because the algebra has no way to ask them.
+Sixty-three puzzles in eleven chapters. Fifty can be answered in either language; the other thirteen
+are SQL only, because the algebra has no way to ask them — or, in the rewriting levels, because the
+algebra never had a subquery to take out.
 
 | Chapter | Levels | What it teaches |
 | --- | --- | --- |
@@ -72,6 +73,17 @@ only, because the algebra has no way to ask them.
 | Advanced | 17–25 | theta joins, self-joins for "at least two" and "exactly one", max without aggregation, "only", division by a derived relation, universal quantification by double negation |
 | Aggregation | 26–37 | `ℱ` with and without grouping, several functions at once, WHERE vs HAVING, aggregating a join, and joining a grouped result back to find *which* row hit the maximum |
 | SQL only | 38–43 | duplicate rows, `ORDER BY`, `LIMIT`, computed columns, `COUNT(DISTINCT …)` |
+| Subqueries | 44–48 | `IN`, `EXISTS` and `NOT EXISTS` — then the same questions again *without* a subquery: a join and `DISTINCT`, and `EXCEPT` |
+| Scalar subqueries | 49–52 | a subquery as a single value, correlated with the outer row, in the `SELECT` list (where it can count to 0), and rewritten as a self-join with `HAVING` |
+| Algebra and SQL | 53–58 | translating each operator: π is `SELECT DISTINCT`, ⋈, ρ and ×, − as `EXCEPT` (and `NOT IN` as −), σ over ℱ as `HAVING`, ÷ as a double `NOT EXISTS` |
+| Views and CTEs | 59–63 | `WITH` for a step one query needs, `CREATE VIEW` for one many queries share or one that hides columns, and both in their place |
+
+The rewriting levels (47, 48 and 52) and the views and CTEs chapter are graded on *how* the query is
+written as well as on what it returns: the right rows with a subquery in them, or without the `WITH`
+the level asks for, get *the right rows, but this level asks for it without a subquery*.
+
+In the algebra and SQL chapter the question itself is written in the other language: SQL mode shows an
+algebra expression to translate, and algebra mode shows a SQL query to translate back.
 
 The advanced chapter is where relational algebra stops being a notation for SQL and starts being a
 logic: with no aggregation and no counting, `MAX` becomes "nobody beats me", `only` becomes "has no
@@ -150,10 +162,14 @@ that a relation does not:
 
 Supported: `SELECT` / `DISTINCT`, `FROM` with aliases, `JOIN … ON`, `JOIN … USING`, `NATURAL JOIN`,
 `CROSS JOIN` and the comma join, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY … ASC/DESC`, `LIMIT` /
-`OFFSET`, `UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT`, subqueries in `FROM`, and subqueries in a
+`OFFSET`, `UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT`, subqueries in `FROM`, subqueries in a
 condition with `IN`, `NOT IN`, `EXISTS`, `NOT EXISTS` or as a single value — correlated to the outer
-query or not. Conditions also take `BETWEEN`, `LIKE` (with `%` and `_`) and arithmetic. The aggregate
+query or not — and named queries: `WITH name [(columns)] AS (…)`, and
+`CREATE VIEW name [(columns)] AS …;` written before the query that reads it. Conditions also take `BETWEEN`, `LIKE` (with `%` and `_`) and arithmetic. The aggregate
 functions are `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, plus `COUNT(*)` and `COUNT(DISTINCT x)`.
+
+A view here lasts as long as the answer it is written in, since each answer is run on its own; a view
+may not reuse a table's name, while a CTE may shadow one, as in SQL.
 
 Outer joins and `NULL` are deliberately absent: every join here is an inner join, and saying so
 plainly beats a half-implemented three-valued logic.
@@ -182,7 +198,7 @@ level is worth ✓ rather than ★ until you write it yourself.
 
 Both directions are checked before you see them: the game runs the translation it just wrote and
 compares it with the original's answer, so a translation that quietly disagreed is refused rather
-than shown. `npm test` checks all 43 levels through both translations.
+than shown. `npm test` checks all 63 levels through both translations.
 
 **Some queries cannot cross, and that refusal is the lesson.** The algebra has no `ORDER BY`, no
 `LIMIT`, no computed columns, no `COUNT(DISTINCT …)`, and — the interesting one — no way to put a
@@ -191,9 +207,11 @@ subquery inside a condition:
 > `EXISTS` has no counterpart in the algebra — σ only compares attributes and values, so this one
 > has to be built out of ⋈, − or ÷.
 
-That is exactly the boundary the advanced chapter is about. Thirty of the forty-three levels'
-SQL answers read back as algebra; the thirteen that do not are 15, 16, 18, 21, 22, 23, 25 and 37
-(all subqueries) and the SQL-only chapter.
+That is exactly the boundary the advanced chapter is about. Forty-one of the sixty-three levels' SQL
+answers read back as algebra; the twenty-two that do not are the ones with a subquery in a condition,
+the ones with `ORDER BY`, a computed column or `COUNT(DISTINCT …)`, and those are listed by `npm test`.
+A `WITH` or a view does cross: a name for a query has no counterpart in the algebra, so the query is
+written out in place, under a ρ that keeps its name.
 
 Under the canvas, **The same query in SQL** shows the translation without leaving the algebra, and
 **Write it in SQL ›** puts it in the editor even when the editor already has something in it.
@@ -239,7 +257,7 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     src/styles.css           all styling
     src/engine.js            relational algebra engine: relations, operators, condition parser, checking
     src/sql.js               SQL engine over the same relations, and the translation both ways
-    src/levels.js            the two databases and the 43 puzzles (each with an algebra and/or a SQL answer)
+    src/levels.js            the two databases and the 63 puzzles (each with an algebra and/or a SQL answer)
     src/app.js               UI: drag and drop, tree editing, the SQL editor, live evaluation, progress
     test/sql.js              unit test for the SQL engine and every level's two answers
     test/smoke.js            end-to-end test that drives the real UI in jsdom
@@ -249,15 +267,16 @@ Edit the files in `src/`, then run `npm run build` to regenerate `index.html`.
     npm install      # jsdom, for the smoke test only — the game itself has no dependencies
     npm test         # builds, runs the SQL unit test, then drives the built index.html
 
-`test/sql.js` runs the SQL engine against a battery of queries and error messages, renders all 37
-algebra solutions as SQL, reads all 43 SQL answers back as algebra, checks that every translation
+`test/sql.js` runs the SQL engine against a battery of queries and error messages, renders all 50
+algebra solutions as SQL, reads all 63 SQL answers back as algebra, checks that every translation
 still returns the same table, and checks every level's SQL answer against its algebra twin row for
-row — so a level can never mean two different things in its two languages. It prints the levels whose
+row — so a level can never mean two different things in its two languages. It also checks that every
+level which requires or forbids a construction is solved by its own answer. It prints the levels whose
 SQL has no algebra form, with the reason, which is a useful map of where the two languages part.
 
 The smoke test boots the page, places nodes by click and by drop, checks a wrong answer and a broken
 condition, exercises tab completion in both editors, then solves every level through the UI in every
-language it can be asked in — 37 in the algebra and 43 in SQL — and asserts there are no console
+language it can be asked in — 50 in the algebra and 63 in SQL — and asserts there are no console
 errors. Point it at any copy of the built file to prove that copy stands alone:
 
     node test/smoke.js /some/other/place/index.html
@@ -282,6 +301,8 @@ Append to `LEVELS` in `src/levels.js`, then `npm run build`. Solutions are expre
     tip: 'The same level told in SQL; question: overrides the English too, if it has to.',
     focus: ['WHERE'],              // marks the clause "new" in the palette
     ordered: true,                 // optional: check the rows in the order they come back
+    forbid: ['subquery'],          // optional: 'subquery', 'with' or 'view' must not appear…
+    require: ['with'],             // …or must: checked once the rows are right
     hints: ['Its own hints.'],
     solution: 'SELECT ename\n' +
               'FROM Employee\n' +
