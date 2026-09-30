@@ -2,8 +2,9 @@
    so any level can be answered in either language.
 
    SELECT/DISTINCT, joins (comma, INNER ... ON, USING, NATURAL, CROSS), WHERE,
-   GROUP BY/HAVING, ORDER BY/LIMIT, UNION/INTERSECT/EXCEPT, and subqueries —
-   IN, EXISTS and scalar, correlated or not. Unlike the algebra it keeps
+   GROUP BY/HAVING, ORDER BY/LIMIT, UNION/INTERSECT/EXCEPT, subqueries —
+   IN, EXISTS and scalar, correlated or not — and named queries: WITH, and
+   CREATE VIEW ahead of the query that uses it. Unlike the algebra it keeps
    duplicate rows, because knowing when to write DISTINCT is half of what SQL
    has to teach. */
 (function (global) {
@@ -16,7 +17,7 @@
 
   var KEYWORDS = ('SELECT DISTINCT ALL AS FROM WHERE GROUP BY HAVING ORDER ASC DESC LIMIT OFFSET ' +
     'JOIN INNER LEFT RIGHT FULL OUTER NATURAL CROSS ON USING UNION INTERSECT EXCEPT ' +
-    'AND OR NOT IN EXISTS BETWEEN LIKE IS NULL TRUE FALSE').split(' ');
+    'AND OR NOT IN EXISTS BETWEEN LIKE IS NULL TRUE FALSE WITH CREATE VIEW').split(' ');
   var KW = Object.create(null);
   KEYWORDS.forEach(function (k) { KW[k] = true; });
 
@@ -131,8 +132,59 @@
       try { return fn(); } catch (e) { pos = save; return null; }
     }
 
-    /* queryExpr := queryTerm ((UNION [ALL] | INTERSECT | EXCEPT) queryTerm)* [ORDER BY ...] [LIMIT n] */
+    /* script := (CREATE VIEW name AS queryExpr ;)* queryExpr
+       A view outlives the query in a real database; here it lives for the
+       length of the answer, which is all a single answer can show. */
+    function script() {
+      var views = [];
+      while (atKw('CREATE')) {
+        next();
+        if (!eatKw('VIEW')) throw err('Only CREATE VIEW is part of this playground — the tables are already made.');
+        views.push(namedQuery('CREATE VIEW', false));
+        if (tokens[pos - 1].t !== ';') {
+          throw err('End the CREATE VIEW with a semicolon, then write the query that uses the view.');
+        }
+      }
+      if (views.length && at('end')) throw err('A view on its own returns nothing — follow it with a query that uses it.');
+      var body = queryExpr();
+      return views.length ? { kind: 'with', view: true, defs: views, body: body } : body;
+    }
+
+    /* name [(col, ...)] AS query — the shared shape of a view and a CTE. A CTE's
+       query must be parenthesized; a view's may be. */
+    function namedQuery(what, parens) {
+      var name = want('id', undefined, 'a name after ' + what).v;
+      var cols = null;
+      if (at('(')) {
+        next();
+        cols = [];
+        do { cols.push(want('id', undefined, 'a column name').v); } while (at(',') && next());
+        want(')', undefined, 'a closing ")"');
+      }
+      if (!eatKw('AS')) throw err(what + ' ' + name + ' needs AS before its query.');
+      var query;
+      if (parens) {
+        want('(', undefined, '"(" around the query after AS');
+        query = queryExpr();
+        want(')', undefined, 'a closing ")"');
+      } else {
+        query = queryExpr();
+      }
+      return { name: name, cols: cols, query: query };
+    }
+
+    /* queryExpr := [WITH name AS (query), ...] queryTerm ((UNION [ALL] | INTERSECT | EXCEPT) queryTerm)*
+                    [ORDER BY ...] [LIMIT n] */
     function queryExpr() {
+      if (atKw('WITH')) {
+        next();
+        var defs = [];
+        do { defs.push(namedQuery('WITH', true)); } while (at(',') && next());
+        if (!atKw('SELECT') && !at('(')) {
+          throw err('After the WITH comes the query that uses it, starting with SELECT.');
+        }
+        return { kind: 'with', view: false, defs: defs, body: queryExpr() };
+      }
       var node = queryTerm();
       while (atKw('UNION', 'INTERSECT', 'EXCEPT')) {
         var op = next().v.toLowerCase();
@@ -278,7 +330,7 @@
           if (!alias) throw err('A subquery in FROM needs a name: (SELECT ...) AS t.');
           return { kind: 'derived', query: sub, alias: alias };
         };
-        if (peek(1).t === 'kw' && peek(1).v === 'SELECT') return derived();
+        if (peek(1).t === 'kw' && (peek(1).v === 'SELECT' || peek(1).v === 'WITH')) return derived();
         var maybe = attempt(derived);
         if (maybe) return maybe;
         next();
@@ -330,7 +382,7 @@
         next();
         want('(', undefined, '"(" after IN');
         var node;
-        if (atKw('SELECT')) {
+        if (atKw('SELECT', 'WITH')) {
           node = { k: 'in', l: left, sub: queryExpr(), negated: negated };
         } else {
           var list = [];
@@ -367,7 +419,7 @@
 
     function parenSubquery(what) {
       want('(', undefined, '"(" after ' + what);
-      if (!atKw('SELECT')) throw err(what + ' needs a subquery: ' + what + ' (SELECT ...).');
+      if (!atKw('SELECT', 'WITH')) throw err(what + ' needs a subquery: ' + what + ' (SELECT ...).');
       var sub = queryExpr();
       want(')', undefined, 'a closing ")"');
       return sub;
@@ -401,7 +453,7 @@
       if (tk.t === 'kw' && (tk.v === 'TRUE' || tk.v === 'FALSE')) { next(); return { k: 'lit', v: tk.v === 'TRUE' }; }
       if (tk.t === 'kw' && tk.v === 'NULL') { next(); return { k: 'lit', v: null }; }
       if (tk.t === '(') {
-        if (peek(1).t === 'kw' && peek(1).v === 'SELECT') {
+        if (peek(1).t === 'kw' && (peek(1).v === 'SELECT' || peek(1).v === 'WITH')) {
           next();
           var sub = queryExpr();
           want(')', undefined, 'a closing ")"');
@@ -440,7 +492,8 @@
       return { k: 'agg', fn: fn, arg: arg, distinct: distinct };
     }
 
-    var tree = queryExpr();
+    var tree = script();
+    if (atKw('CREATE')) throw err('CREATE VIEW goes before the query, not after it.');
     if (!at('end')) throw err('Unexpected ' + show(peek()) + ' after the end of the query.');
     return tree;
   }
@@ -1021,7 +1074,90 @@
   }
 
   function evalQuery(node, db, outer) {
+    if (node.kind === 'with') return evalWith(node, db, outer);
     return node.kind === 'setop' ? evalSetOp(node, db, outer) : evalSelect(node, db, outer);
+  }
+
+  function findName(db, name) {
+    var low = name.toLowerCase();
+    return Object.keys(db).filter(function (k) { return k.toLowerCase() === low; })[0];
+  }
+
+  /* Each named query is evaluated once and then read like a table, by the
+     queries after it and by the body. A CTE may shadow a table; a view may not,
+     because it would have to live in the same schema. */
+  function evalWith(node, db, outer) {
+    var scope = {};
+    Object.keys(db).forEach(function (k) { scope[k] = db[k]; });
+    node.defs.forEach(function (def) {
+      var clash = findName(scope, def.name);
+      if (clash && node.view) {
+        throw err('There is already a ' + (db[clash] ? 'table' : 'view') + ' called "' + clash + '" — give the view another name.');
+      }
+      var rel = evalQuery(def.query, scope, outer);
+      var attrs = rel.attrs.map(bareName);
+      if (def.cols) {
+        if (def.cols.length !== attrs.length) {
+          throw err(def.name + ' names ' + def.cols.length + ' column(s), but its query returns ' + attrs.length + '.');
+        }
+        attrs = def.cols.slice();
+      }
+      var seen = Object.create(null);
+      attrs.forEach(function (a) {
+        if (seen[a.toLowerCase()]) {
+          throw err(def.name + ' has two columns called "' + a + '" — rename one with AS' +
+            (def.cols ? '' : ', or list the names: ' + def.name + '(a, b, ...)') + '.');
+        }
+        seen[a.toLowerCase()] = true;
+      });
+      if (clash) delete scope[clash];          // shadowed from here on, not inside its own body
+      scope[def.name] = {
+        name: def.name,
+        attrs: attrs,
+        rows: rel.rows.map(function (row) {
+          var o = {};
+          rel.attrs.forEach(function (a, i) { o[attrs[i]] = row[a]; });
+          return o;
+        })
+      };
+    });
+    return evalQuery(node.body, scope, outer);
+  }
+
+  /* What a query is built from, for levels that ask for — or rule out — a
+     particular construction. A named query's body is not itself a subquery. */
+  function features(text) {
+    var found = { subquery: false, with: false, view: false };
+    walkQuery(parse(text));
+    return found;
+
+    function walkQuery(q) {
+      if (!q) return;
+      if (q.kind === 'with') {
+        found[q.view ? 'view' : 'with'] = true;
+        q.defs.forEach(function (d) { walkQuery(d.query); });
+        walkQuery(q.body);
+        return;
+      }
+      (q.order || []).forEach(function (o) { walkExpr(o.expr); });
+      if (q.kind === 'setop') { walkQuery(q.left); walkQuery(q.right); return; }
+      q.items.forEach(function (i) { walkExpr(i.expr); });
+      q.from.forEach(walkFrom);
+      walkExpr(q.where);
+      (q.group || []).forEach(walkExpr);
+      walkExpr(q.having);
+    }
+    function walkFrom(item) {
+      if (item.kind === 'derived') { found.subquery = true; walkQuery(item.query); return; }
+      if (item.kind === 'join') { walkFrom(item.left); walkFrom(item.right); walkExpr(item.on); }
+    }
+    function walkExpr(n) {
+      if (!n || typeof n !== 'object') return;
+      if (n.k === 'sub') { found.subquery = true; walkQuery(n.query); return; }
+      if (n.sub) { found.subquery = true; walkQuery(n.sub); }
+      ['l', 'r', 'lo', 'hi', 'arg'].forEach(function (f) { walkExpr(n[f]); });
+      (n.list || []).forEach(walkExpr);
+    }
   }
 
   function run(text, db) {
@@ -1406,20 +1542,31 @@
     (n.list || []).forEach(function (x) { collectAggs(x, out); });
   }
 
-  function queryToTree(node, db) {
+  function queryToTree(node, db, defs) {
+    if (node.kind === 'with') {
+      var scope = {};
+      Object.keys(defs || {}).forEach(function (k) { scope[k] = defs[k]; });
+      node.defs.forEach(function (def) {
+        var tree = queryToTree(def.query, db, scope);
+        var clash = findName(scope, def.name);
+        if (clash) delete scope[clash];
+        scope[def.name] = def.cols ? opNode('rename', '(' + def.cols.join(', ') + ')', [tree]) : tree;
+      });
+      return queryToTree(node.body, db, scope);
+    }
     if (node.order) noAlgebra('ORDER BY', 'a relation has no row order to set');
     if (node.limit != null) noAlgebra('LIMIT', 'with no order there is no first row to take');
     if (node.kind === 'setop') {
       if (node.all) noAlgebra('UNION ALL', 'the algebra has no duplicate rows to keep');
       var kind = { union: 'union', intersect: 'intersect', except: 'difference' }[node.op];
-      return opNode(kind, '', [queryToTree(node.left, db), queryToTree(node.right, db)]);
+      return opNode(kind, '', [queryToTree(node.left, db, defs), queryToTree(node.right, db, defs)]);
     }
-    return selectToTree(node, db);
+    return selectToTree(node, db, defs);
   }
 
-  function selectToTree(n, db) {
+  function selectToTree(n, db, defs) {
     if (!n.from.length) noAlgebra('a query with no FROM', 'every expression starts from a relation');
-    var tree = n.from.map(function (item) { return fromItemToTree(item, db); })
+    var tree = n.from.map(function (item) { return fromItemToTree(item, db, defs); })
       .reduce(function (a, b) { return opNode('product', '', [a, b]); });
 
     if (n.where) {
@@ -1487,15 +1634,19 @@
 
   function attrsOf(tree, db) { return RA.evaluate(tree, db).attrs; }
 
-  function fromItemToTree(item, db) {
+  function fromItemToTree(item, db, defs) {
     if (item.kind === 'table') {
+      var named = defs && findName(defs, item.name);
+      // A view or a CTE is a name for an expression, so the algebra writes the
+      // expression itself — renamed, so that qualified names still resolve.
+      if (named) return opNode('rename', item.alias || named, [defs[named]]);
       var base = lookupTable(db, item.name);
       var node = relNode(base.name);
       return item.alias && item.alias !== base.name ? opNode('rename', item.alias, [node]) : node;
     }
-    if (item.kind === 'derived') return opNode('rename', item.alias, [queryToTree(item.query, db)]);
+    if (item.kind === 'derived') return opNode('rename', item.alias, [queryToTree(item.query, db, defs)]);
 
-    var left = fromItemToTree(item.left, db), right = fromItemToTree(item.right, db);
+    var left = fromItemToTree(item.left, db, defs), right = fromItemToTree(item.right, db, defs);
     if (item.natural) return opNode('join', '', [left, right]);
     if (item.using) {
       var shared = attrsOf(left, db).map(bareName).filter(function (a) {
@@ -1552,7 +1703,9 @@
     { word: 'EXCEPT', kind: 'set', insert: 'EXCEPT\n', hint: 'the rows of the first, minus the second' },
     { word: 'IN', kind: 'sub', insert: 'IN (', hint: 'is the value one of these?' },
     { word: 'EXISTS', kind: 'sub', insert: 'EXISTS (', hint: 'does the subquery find anything?' },
-    { word: 'NOT EXISTS', kind: 'sub', insert: 'NOT EXISTS (', hint: 'does it find nothing at all?' }
+    { word: 'NOT EXISTS', kind: 'sub', insert: 'NOT EXISTS (', hint: 'does it find nothing at all?' },
+    { word: 'WITH', kind: 'sub', insert: 'WITH ', hint: 'name a query for this statement only' },
+    { word: 'CREATE VIEW', kind: 'sub', insert: 'CREATE VIEW ', hint: 'name a query the database keeps' }
   ];
 
   global.SQL = {
@@ -1561,6 +1714,7 @@
     parse: parse,
     fromTree: fromTree,
     toTree: toTree,
+    features: features,
     KEYWORDS: KEYWORDS,
     AGGREGATES: Object.keys(AGGREGATES).filter(function (f) { return f !== 'AVERAGE'; }),
     error: err

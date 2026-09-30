@@ -98,7 +98,22 @@ const CASES = [
   ['count over nothing', "SELECT COUNT(*) AS n FROM Employee WHERE dept = 'Legal'", company, 'n', ['0']],
   ['nested set ops keep their grouping',
    '(SELECT dept FROM Department EXCEPT SELECT dept FROM Employee) UNION SELECT dept FROM Employee WHERE age > 50',
-   company, 'dept', ['Research', 'Sales']]
+   company, 'dept', ['Research', 'Sales']],
+  ['with', 'WITH Pay AS (SELECT dept, AVG(salary) AS pay FROM Employee GROUP BY dept) ' +
+   'SELECT dept FROM Pay WHERE pay > 60000', company, 'dept', ['Engineering', 'Sales']],
+  ['with, named columns, read twice', 'WITH Load(pid, total) AS (SELECT pid, SUM(hours) FROM WorksOn GROUP BY pid) ' +
+   'SELECT pid FROM Load WHERE total = (SELECT MAX(total) FROM Load)', company, 'pid', ['P1']],
+  ['with, a later step reads an earlier one', 'WITH A AS (SELECT eid FROM WorksOn WHERE hours > 10), ' +
+   'B AS (SELECT DISTINCT eid FROM A) SELECT ename FROM Employee NATURAL JOIN B', company, 'ename', ['Ada', 'Cleo', 'Dara']],
+  ['with shadows a table', 'WITH Employee AS (SELECT ename FROM Employee WHERE age > 50) SELECT * FROM Employee',
+   company, 'ename', ['Evan']],
+  ['with inside a subquery', 'SELECT ename FROM Employee WHERE eid IN ' +
+   '(WITH Big AS (SELECT eid FROM WorksOn WHERE hours > 15) SELECT eid FROM Big)', company, 'ename', ['Cleo']],
+  ['view', "CREATE VIEW Directory AS SELECT eid, ename, dept FROM Employee; SELECT ename FROM Directory WHERE dept = 'Sales'",
+   company, 'ename', ['Bran', 'Evan']],
+  ['view over a view, then a cte', 'CREATE VIEW V1 AS SELECT eid, dept FROM Employee; ' +
+   'CREATE VIEW V2 (d) AS SELECT DISTINCT dept FROM V1; WITH C AS (SELECT COUNT(*) AS n FROM V2) SELECT n FROM C',
+   company, 'n', ['3']]
 ];
 
 console.log('queries:');
@@ -131,7 +146,19 @@ const ERRORS = [
   ['star with group by', 'SELECT * FROM Employee GROUP BY dept', company, /cannot be grouped/],
   ['multi-column subquery', 'SELECT * FROM Employee WHERE eid IN (SELECT eid, pid FROM WorksOn)', company,
    /must return exactly one/],
-  ['unknown function', 'SELECT UPPER(ename) FROM Employee', company, /no function "UPPER"/]
+  ['unknown function', 'SELECT UPPER(ename) FROM Employee', company, /no function "UPPER"/],
+  ['with without a body', 'WITH A AS (SELECT * FROM Employee)', company, /After the WITH comes the query/],
+  ['with without parens', 'WITH A AS SELECT * FROM Employee SELECT * FROM A', company, /"\(" around the query/],
+  ['cte column count', 'WITH A(x, y) AS (SELECT eid FROM Employee) SELECT * FROM A', company, /names 2 column/],
+  ['cte column clash', 'WITH A AS (SELECT X.eid, Y.eid FROM Employee X, Employee Y) SELECT * FROM A', company,
+   /two columns called "eid"/],
+  ['view without semicolon', 'CREATE VIEW V AS SELECT eid FROM Employee SELECT * FROM V', company, /semicolon/],
+  ['view on its own', 'CREATE VIEW V AS SELECT eid FROM Employee;', company, /follow it with a query/],
+  ['view named like a table', 'CREATE VIEW Employee AS SELECT eid FROM Employee; SELECT * FROM Employee', company,
+   /already a table called "Employee"/],
+  ['create table', 'CREATE TABLE T AS SELECT eid FROM Employee; SELECT * FROM T', company, /Only CREATE VIEW/],
+  ['view after the query', 'SELECT * FROM Employee; CREATE VIEW V AS SELECT eid FROM Employee;', company,
+   /goes before the query/]
 ];
 
 console.log('errors:');
@@ -222,6 +249,36 @@ GAME.LEVELS.forEach((level, i) => {
 });
 console.log('  ' + readBack + '/' + GAME.LEVELS.length + ' SQL answers read back as algebra; the rest say why not:');
 refused.forEach(line => console.log(line));
+
+/* A level that rules a construction in or out must be solvable by its own answer,
+   and the detector has to tell a subquery from a named query. */
+console.log('rules:');
+const FEATURES = [
+  ['SELECT * FROM Employee', ''],
+  ['SELECT ename FROM Employee WHERE eid IN (SELECT eid FROM WorksOn)', 'subquery'],
+  ['SELECT * FROM (SELECT eid FROM Employee) AS t', 'subquery'],
+  ['SELECT dept, (SELECT COUNT(*) FROM Employee) FROM Department', 'subquery'],
+  ['SELECT * FROM Employee E JOIN Department D ON EXISTS (SELECT * FROM WorksOn)', 'subquery'],
+  ['WITH A AS (SELECT eid FROM Employee) SELECT * FROM A', 'with'],
+  ['WITH A AS (SELECT eid FROM Employee WHERE eid IN (SELECT eid FROM WorksOn)) SELECT * FROM A', 'subquery,with'],
+  ['CREATE VIEW V AS SELECT eid FROM Employee; SELECT * FROM V', 'view'],
+  ['CREATE VIEW V AS SELECT eid FROM Employee; WITH A AS (SELECT * FROM V) SELECT * FROM A', 'with,view']
+];
+FEATURES.forEach(([sql, want]) => {
+  const f = SQL.features(sql);
+  const got = Object.keys(f).filter(k => f[k]).join(',');
+  ok('features of ' + sql, got === want, got + ' != ' + want);
+});
+let ruled = 0;
+GAME.LEVELS.forEach((level, i) => {
+  const sql = level.sql || {};
+  if (!sql.require && !sql.forbid) return;
+  ruled++;
+  const f = SQL.features(sql.solution);
+  (sql.require || []).forEach(k => ok('level ' + (i + 1) + ' answer uses ' + k, f[k]));
+  (sql.forbid || []).forEach(k => ok('level ' + (i + 1) + ' answer avoids ' + k, !f[k]));
+});
+console.log('  ' + FEATURES.length + ' detections, ' + ruled + ' levels with rules');
 
 /* The answer a student is checked against, in each language. */
 console.log('shapes:');
