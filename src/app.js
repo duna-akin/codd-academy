@@ -857,6 +857,27 @@
     return { checkNames: !!lv.checkNames, multiset: true, ordered: !!lv.sql.ordered };
   }
 
+  /* Some levels are about how the query is written, not only what it returns:
+     "without a subquery", "with a view". Checked once the rows are right. */
+  var RULES = {
+    subquery: { forbid: 'this level asks for it without a subquery — no SELECT nested inside another, in FROM or in a condition.',
+                require: 'this level asks for a subquery.' },
+    with: { forbid: 'this level asks for it without WITH.',
+            require: 'this level asks you to name a step with WITH … AS (…) and use it.' },
+    view: { forbid: 'this level asks for it without a view.',
+            require: 'this level asks you to CREATE VIEW first, then answer from the view.' }
+  };
+
+  function brokenRule() {
+    var sql = level().sql;
+    if (state.mode !== 'sql' || !sql || !(sql.require || sql.forbid)) return null;
+    var used = SQL.features(state.sql);
+    var need = (sql.require || []).filter(function (f) { return !used[f]; })[0];
+    if (need) return RULES[need].require;
+    var banned = (sql.forbid || []).filter(function (f) { return used[f]; })[0];
+    return banned ? RULES[banned].forbid : null;
+  }
+
   function check() {
     var res = evaluateCurrent();
     if (!res.ok) {
@@ -867,6 +888,11 @@
       return;
     }
     var verdict = RA.compare(res.relation, expectedRelation(), checkOptions());
+    var broken = verdict.ok && brokenRule();
+    if (broken) {
+      setFeedback('bad', '<b>The right rows, but</b> ' + broken);
+      return;
+    }
     if (verdict.ok) {
       var grade = state.usedHelp ? 'silver' : 'gold';
       if (solvedIn(state.mode)[state.levelIndex] !== 'gold') solvedIn(state.mode)[state.levelIndex] = grade;
